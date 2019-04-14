@@ -9,3 +9,7 @@ D_WORD = 300
 VOCAB_SIZE = 10000
 
 BATCH = 32
+
+BASE_SIZE = 299
+
+BRANCH_NUM = 3  # Generator steps?

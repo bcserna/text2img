@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 import torchvision
 
-from config import D_HIDDEN, IMG_WEIGHT_INIT_RANGE, P_DROP, D_WORD, VOCAB_SIZE, BATCH
+from src.config import D_HIDDEN, P_DROP, D_WORD, VOCAB_SIZE
 
 
 class TextEncoder(nn.Module):
