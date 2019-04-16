@@ -1,3 +1,5 @@
+import random
+
 import pandas as pd
 import pickle
 import re
@@ -6,18 +8,19 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import torchvision.transforms as transforms
 
-from src.config import BASE_SIZE, BRANCH_NUM
+from src.config import BASE_SIZE, BRANCH_NUM, CAPTIONS, END_TOKEN, CAP_MAX_LEN
 
 
 class CUB(Dataset):
     def __init__(self):
-        # Load image paths
+        print('Loading image paths ...')
         self.data = pd.read_csv('CUB_200_2011/images.txt', delim_whitespace=True, header=None, index_col=0,
                                 names=['img_path'])
 
-        # Load captions
+        print('Loading image captions, counting word frequencies, building vocab ...')
+        self.word_freq = {}
         self.captions = {}
-        for idx, row in self.data.iterrows():
+        for i, row in self.data.iterrows():
             dir, file = row['img_path'].split('/')
             file = file.replace('.jpg', '.txt')
 
@@ -26,22 +29,33 @@ class CUB(Dataset):
                 lines = f.readlines()
                 # Keep only alphanumeric characters
                 captions = [pattern.sub('', line.lower().strip()) for line in lines]
-                self.captions[idx] = captions
+                self.captions[i] = captions
 
-        # Set train and test examples
+                for c in captions:
+                    for word in c.split():
+                        self.word_freq[word] = self.word_freq.get(word, 0) + 1
+
+        self.vocab = {word_freq[0]: i for i, word_freq in enumerate(self.word_freq.items(), start=1)
+                      # if word_freq[1] > 2
+                      }
+        self.vocab[END_TOKEN] = 0
+        print(f'Vocab size:{len(self.vocab)}')
+
+        print('Setting train/test split...')
         with open('CUB_200_2011/test/filenames.pickle', 'rb') as f:
             test = pickle.load(f)
 
         self.data['train'] = self.data['img_path'].apply(lambda x: 0 if x[:x.index('.jpg')] in test else 1)
+        self.data.sort_values(by='train', inplace=True, ascending=False)
 
-        # Load bounding boxes
+        print('Loading bounding boxes ...')
         bbox = pd.read_csv('CUB_200_2011/bounding_boxes.txt', delim_whitespace=True, header=None, index_col=0,
                            names=['bbox_x', 'bbox_y', 'bbox_width', 'bbox_height'])
         self.data = self.data.merge(bbox, left_index=True, right_index=True)
 
         self.max_size = BASE_SIZE * (2 ** (BRANCH_NUM - 1))
         self.transforms = transforms.Compose([
-            transforms.Scale(self.max_size * 76 // 64),
+            transforms.Resize(self.max_size * 76 // 64),
             transforms.RandomCrop(self.max_size),
             transforms.RandomHorizontalFlip()
         ])
@@ -52,16 +66,25 @@ class CUB(Dataset):
 
         self.imsize = [BASE_SIZE * 2 ** i for i in range(BRANCH_NUM)]
 
-    def __getitem__(self, index):
-        index = index + 1  # image index starts from 1
+    def get_caption(self, index):
+        caption_idx = random.randint(0, CAPTIONS - 1)
+        caption = self.captions[index][caption_idx]
+        encoded = [self.vocab[w] for w in caption.split()]
+        cap_len = len(encoded)
+        if cap_len < CAP_MAX_LEN:
+            encoded = encoded + [self.vocab[END_TOKEN] for _ in range(CAP_MAX_LEN - cap_len)]
 
-        img_data = self.data.iloc[index]
-        img = Image.open(img_data.image_path)
+        return encoded[:CAP_MAX_LEN]
+
+    def get_image(self, index):
+        img_data = self.data.loc[index, :]
+        img = Image.open('CUB_200_2011/images/' + img_data.img_path)
         width, height = img.size
 
         r = int(np.maximum(img_data.bbox_width, img_data.bbox_height) * 0.75)
-        center_x = (2 * img_data.bbox_x + img_data.bbox_width) // 2
-        center_y = (2 * img_data.bbox_y + img_data.bbox_height) // 2
+        # center_x = (2 * img_data.bbox_x + img_data.bbox_width) // 2
+        center_x = img_data.bbox_x + img_data.bbox_width // 2
+        center_y = img_data.bbox_y + img_data.bbox_height // 2
         y1 = np.maximum(0, center_y - r)
         y2 = np.minimum(height, center_y + r)
         x1 = np.maximum(0, center_x - r)
@@ -69,15 +92,19 @@ class CUB(Dataset):
         img = img.crop([x1, y1, x2, y2])
         img = self.transforms(img)
 
-        ret = []
+        imgs = []
         for i in range(BRANCH_NUM):
             if i < (BRANCH_NUM - 1):
-                re_img = transforms.Scale(self.imsize[i])(img)
+                re_img = transforms.Resize(self.imsize[i])(img)
             else:
                 re_img = img
-            ret.append(self.normalize(re_img))
+            imgs.append(self.normalize(re_img))
 
-        return ret
+        return imgs
+
+    def __getitem__(self, index):
+        index = index + 1  # Image index start from 1
+        return self.get_image(index), self.get_caption(index)
 
     def __len__(self):
-        return self.data.shape[0]
+        return self.data.train.sum()

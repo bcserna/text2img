@@ -6,10 +6,14 @@ P_DROP = 0.5
 
 D_WORD = 300
 
-VOCAB_SIZE = 10000
-
 BATCH = 32
 
 BASE_SIZE = 299
 
 BRANCH_NUM = 3  # Generator steps?
+
+CAPTIONS = 10
+
+CAP_MAX_LEN = 25
+
+END_TOKEN = '<END>'
