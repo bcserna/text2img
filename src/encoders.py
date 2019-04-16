@@ -1,29 +1,41 @@
 import torch
+import numpy as np
 from torch import nn
 import torch.nn.functional as F
 import torchvision
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-from src.config import D_HIDDEN, P_DROP, D_WORD, VOCAB_SIZE
+from src.config import D_HIDDEN, P_DROP, D_WORD, BATCH
 
 
 class TextEncoder(nn.Module):
-    def __init__(self):
+    def __init__(self, vocab_size):
         super().__init__()
-        self.embed = nn.Embedding(num_embeddings=VOCAB_SIZE, embedding_dim=D_WORD)
+        self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=D_WORD)
         self.emb_dropout = nn.Dropout(P_DROP)
         self.rnn = nn.LSTM(
             input_size=D_WORD,
             hidden_size=D_HIDDEN // 2,  # bidirectional
             batch_first=True,
-            dropout=P_DROP,
+            # dropout=P_DROP,
             bidirectional=True)
         # Initial cell and hidden state for each sequence
-        self.cell0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True)
         self.hidden0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True)
+        self.cell0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True)
 
-    def forward(self, x):
-        e = self.embed(x)
+    def forward(self, x, cap_lens):
+        sort = np.argsort(cap_lens)[::-1]
+        cap_lens = np.asarray(cap_lens)[sort]
+        x = np.asarray(x)[sort]
+
+        e = self.embed(torch.tensor(x, dtype=torch.int64))
         e = self.emb_dropout(e)
+        print(e.size())
+        # e = pack_padded_sequence(e, cap_lens, batch_first=True)
+        out, hidden = self.rnn(e, (self.hidden0.repeat(2, BATCH, 1), self.cell0.repeat(2, BATCH, 1)))
+        # words_repr = pad_packed_sequence(out, batch_first=True)[0]
+        # words_repr = out.transpose(1, 2)
+        return out, hidden
 
 
 

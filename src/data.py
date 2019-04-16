@@ -74,7 +74,7 @@ class CUB(Dataset):
         if cap_len < CAP_MAX_LEN:
             encoded = encoded + [self.vocab[END_TOKEN] for _ in range(CAP_MAX_LEN - cap_len)]
 
-        return encoded[:CAP_MAX_LEN]
+        return encoded[:CAP_MAX_LEN], cap_len
 
     def get_image(self, index):
         img_data = self.data.loc[index, :]
@@ -103,8 +103,10 @@ class CUB(Dataset):
         return imgs
 
     def __getitem__(self, index):
-        index = index + 1  # Image index start from 1
-        return self.get_image(index), self.get_caption(index)
+        index = index + 1  # Image index starts from 1
+        imgs = self.get_image(index)
+        caption, cap_len = self.get_caption(index)
+        return imgs, caption, cap_len
 
     def __len__(self):
         return self.data.train.sum()

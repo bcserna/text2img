@@ -8,7 +8,7 @@ D_WORD = 300
 
 BATCH = 32
 
-BASE_SIZE = 299
+BASE_SIZE = 64
 
 BRANCH_NUM = 3  # Generator steps?
 
