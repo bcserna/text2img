@@ -23,20 +23,18 @@ class TextEncoder(nn.Module):
         self.hidden0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True)
         self.cell0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True)
 
-    def forward(self, x, cap_lens):
-        sort = np.argsort(cap_lens)[::-1]
-        cap_lens = np.asarray(cap_lens)[sort]
-        x = np.asarray(x)[sort]
+    def forward(self, x):
+        # sort = np.argsort(cap_lens)[::-1]
+        # cap_lens = np.asarray(cap_lens)[sort]
+        # x = np.asarray(x)[sort]
 
         e = self.embed(torch.tensor(x, dtype=torch.int64))
         e = self.emb_dropout(e)
-        print(e.size())
         # e = pack_padded_sequence(e, cap_lens, batch_first=True)
         out, hidden = self.rnn(e, (self.hidden0.repeat(2, BATCH, 1), self.cell0.repeat(2, BATCH, 1)))
         # words_repr = pad_packed_sequence(out, batch_first=True)[0]
         # words_repr = out.transpose(1, 2)
         return out, hidden
-
 
 
 class ImageEncoder(nn.Module):
@@ -110,3 +108,9 @@ class ImageEncoder(nn.Module):
         global_features = self.global_proj(x)
 
         return local_features, global_features
+
+
+class CondAug(nn.Module):
+    def __init__(self):
+        super().__init__()
+
