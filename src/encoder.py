@@ -1,11 +1,9 @@
 import torch
-import numpy as np
 from torch import nn
 import torch.nn.functional as F
 import torchvision
-from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-from src.config import D_HIDDEN, P_DROP, D_WORD, BATCH
+from src.config import D_HIDDEN, P_DROP, D_WORD, BATCH, D_COND, CUDA
 
 
 class TextEncoder(nn.Module):
@@ -54,7 +52,8 @@ class ImageEncoder(nn.Module):
 
     def forward(self, x):
         # --> fixed-size input: batch x 3 x 299 x 299
-        x = nn.Upsample(size=(299, 299), mode='bilinear')(x)
+        x = nn.functional.interpolate(input=x, size=(299, 299), mode='bilinear')
+        # x = nn.Upsample(size=(299, 299), mode='bilinear')(x)
         # 299 x 299 x 3
         x = self.inception_model.Conv2d_1a_3x3(x)
         # 149 x 149 x 32
@@ -113,4 +112,24 @@ class ImageEncoder(nn.Module):
 class CondAug(nn.Module):
     def __init__(self):
         super().__init__()
+        self.fc = nn.Linear(D_HIDDEN, D_COND * 4, bias=True)
 
+    def encode(self, text_emb):
+        x = F.glu(self.fc(text_emb))
+        mu = x[:, :D_COND]
+        logvar = x[:, D_COND:]
+        return mu, logvar
+
+    def reparam(self, mu, logvar):
+        std = logvar.mul(0.5).exp_()
+        if CUDA:
+            eps = torch.cuda.FloatTensor(std.size()).normal_()
+        else:
+            eps = torch.FloatTensor(std.size()).normal_()
+        eps = nn.Parameter(eps)
+        return eps.mul(std).add_(mu)
+
+    def forward(self, text_emb):
+        mu, logvar = self.encode(text_emb)
+        c_code = self.reparam(mu, logvar)
+        return c_code, mu, logvar

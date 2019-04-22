@@ -1,5 +1,9 @@
+D_GF = 128
+D_DF = 64
+
 D_HIDDEN = 128
 
+D_Z = 100
 D_COND = 100
 
 IMG_WEIGHT_INIT_RANGE = 0.1
@@ -19,3 +23,5 @@ CAPTIONS = 10
 CAP_MAX_LEN = 25
 
 END_TOKEN = '<END>'
+
+CUDA = False
