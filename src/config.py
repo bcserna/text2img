@@ -1,6 +1,8 @@
 D_GF = 128
 D_DF = 64
 
+RESIDUALS = 2
+
 D_HIDDEN = 128
 
 D_Z = 100
