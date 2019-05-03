@@ -16,7 +16,7 @@ class Generator0(nn.Module):
             nn.modules.activation.GLU()
         )
 
-        self.upsample_steps = nn.Sequential(*[upsample(D_GF // (2 ** i), D_GF // (2 ** (i - 1))) for i in range(4)])
+        self.upsample_steps = nn.Sequential(*[upsample(D_GF // (2 ** i), D_GF // (2 ** (i + 1))) for i in range(4)])
 
     def forward(self, z_code, c_code):
         x = torch.cat((c_code, z_code), 1)
