@@ -26,7 +26,8 @@ def test_run_encoders():
     high_res_imgs = torch.stack([i[2] for i in img_samples])
     img_local, img_global = img_encoder(high_res_imgs)
     print(f'encoded image local features\' shape: {img_local.size()}    global features\' shape: {img_global.size()}')
-    print(f'encoded text shape: {txt_out.size()}    hidden shape: {txt_hidden[0].size()}    cell shape: {txt_hidden[1].size()}')
+    print(
+        f'encoded text shape: {txt_out.size()}    hidden shape: {txt_hidden[0].size()}    cell shape: {txt_hidden[1].size()}')
     return txt_out, txt_hidden, img_local, img_global
 
 
@@ -65,8 +66,12 @@ def test_run_image_gen():
     return out64, out128, out256
 
 
-def test_urn_generator():
+def test_run_generator():
     g = Generator()
     z_code = torch.randn(BATCH, D_Z)
     sent_emb = torch.randn(BATCH, D_HIDDEN)
     word_embs = torch.randn(BATCH, D_WORD, CAP_MAX_LEN)
+    gen, att, mu, logvar = g(z_code, sent_emb, word_embs, None)
+    print(f'Generated shape: {gen.size()}', f'Attention shape: {att.size()}', f'Mu shape: {mu.size()}',
+          f'logvar shape: {logvar.size()}', sep='\n')
+    return gen, att, mu, logvar
