@@ -37,10 +37,10 @@ class GeneratorN(nn.Module):
 
     def forward(self, h_code, c_code, word_embs, mask):
         """
-            h_code1(query):  batch x idf x ih x iw (queryL=ihxiw)
-            word_embs(context): batch x cdf x sourceL (sourceL=seq_len)
-            c_code1: batch x idf x queryL
-            att1: batch x sourceL x queryL
+            h_code1(query), output of previous generator:  batch x D_GF x ih x iw (queryL=ihxiw)
+            word_embs(context): batch x D_COND x seq_len
+            c_code1: batch x D_GF x ih x iw
+            att1: batch x sourceL x ih x iw
         """
         self.attn.applyMask(mask)
         c_code, att = self.attn(h_code, word_embs)
