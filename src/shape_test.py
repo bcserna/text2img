@@ -3,7 +3,7 @@ import torch
 from src.config import BATCH, D_Z, D_HIDDEN, D_COND, D_GF, D_WORD, CAP_MAX_LEN
 from src.data import CUB
 from src.encoder import TextEncoder, ImageEncoder
-from src.generator import Generator0, GeneratorN, ImageGen
+from src.generator import Generator0, GeneratorN, ImageGen, Generator
 
 
 def test_run_encoders():
@@ -16,10 +16,18 @@ def test_run_encoders():
         text_samples.append(data[i][1])
         img_samples.append(data[i][0])
 
-    print(img_samples[0].shape)
-    encoded_txt = text_encoder(text_samples)
-    encoded_img = img_encoder(img_samples)
-    return encoded_txt, encoded_img
+    print('image sample shapes:')
+    for i in img_samples[0]:
+        print(i.size())
+
+    print(f'text sample shape: {len(text_samples[0])}')
+
+    txt_out, txt_hidden = text_encoder(text_samples)
+    high_res_imgs = torch.stack([i[2] for i in img_samples])
+    img_local, img_global = img_encoder(high_res_imgs)
+    print(f'encoded image local features\' shape: {img_local.size()}    global features\' shape: {img_global.size()}')
+    print(f'encoded text shape: {txt_out.size()}    hidden shape: {txt_hidden[0].size()}    cell shape: {txt_hidden[1].size()}')
+    return txt_out, txt_hidden, img_local, img_global
 
 
 def test_run_generator_0():
@@ -56,3 +64,9 @@ def test_run_image_gen():
     print(f'out64: {out64.size()}    out128: {out128.size()}    out256: {out256.size()}')
     return out64, out128, out256
 
+
+def test_urn_generator():
+    g = Generator()
+    z_code = torch.randn(BATCH, D_Z)
+    sent_emb = torch.randn(BATCH, D_HIDDEN)
+    word_embs = torch.randn(BATCH, D_WORD, CAP_MAX_LEN)
