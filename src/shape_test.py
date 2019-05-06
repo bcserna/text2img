@@ -72,6 +72,12 @@ def test_run_generator():
     sent_emb = torch.randn(BATCH, D_HIDDEN)
     word_embs = torch.randn(BATCH, D_WORD, CAP_MAX_LEN)
     gen, att, mu, logvar = g(z_code, sent_emb, word_embs, None)
-    print(f'Generated shape: {gen.size()}', f'Attention shape: {att.size()}', f'Mu shape: {mu.size()}',
-          f'logvar shape: {logvar.size()}', sep='\n')
+    print('Generated shape:')
+    for k in gen:
+        print(gen[k].size())
+    print('Attention shape:')
+    for a in att:
+        print(att[a].size())
+
+    print(f'Mu shape: {mu.size()}    logvar shape: {logvar.size()}')
     return gen, att, mu, logvar
