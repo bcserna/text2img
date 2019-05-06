@@ -3,7 +3,7 @@ import torch
 from src.config import BATCH, D_Z, D_HIDDEN, D_COND, D_GF, D_WORD, CAP_MAX_LEN
 from src.data import CUB
 from src.encoder import TextEncoder, ImageEncoder
-from src.generator import Generator0, GeneratorN
+from src.generator import Generator0, GeneratorN, ImageGen
 
 
 def test_run_encoders():
@@ -43,4 +43,16 @@ def test_run_generator_n():
     out_code, att = g2(out_code, c_code, word_embs, mask)
     print(f'Generator2 output shape: {out_code.size()}    Attention shape: {att.size()}')
     return out_code, att
+
+
+def test_run_image_gen():
+    g = ImageGen()
+    h_code64 = torch.randn(BATCH, D_GF, 64, 64)
+    h_code128 = torch.randn(BATCH, D_GF, 128, 128)
+    h_code256 = torch.randn(BATCH, D_GF, 256, 256)
+    out64 = g(h_code64)
+    out128 = g(h_code128)
+    out256 = g(h_code256)
+    print(f'out64: {out64.size()}    out128: {out128.size()}    out256: {out256.size()}')
+    return out64, out128, out256
 
