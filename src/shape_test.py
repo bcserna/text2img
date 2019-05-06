@@ -1,9 +1,9 @@
 import torch
 
-from src.config import BATCH, D_Z, D_HIDDEN, D_COND
+from src.config import BATCH, D_Z, D_HIDDEN, D_COND, D_GF, D_WORD, CAP_MAX_LEN
 from src.data import CUB
 from src.encoder import TextEncoder, ImageEncoder
-from src.generator import Generator0
+from src.generator import Generator0, GeneratorN
 
 
 def test_run_encoders():
@@ -29,3 +29,18 @@ def test_run_generator_0():
     out = g(z_code, c_code)
     print(f'Generator0 output shape: {out.size()}')
     return out
+
+
+def test_run_generator_n():
+    g1 = GeneratorN()
+    g2 = GeneratorN()
+    h_code = torch.randn(BATCH, D_GF, 64, 64)
+    c_code = torch.randn(BATCH, D_COND)
+    word_embs = torch.randn(BATCH, D_WORD, CAP_MAX_LEN)
+    mask = None
+    out_code, att = g1(h_code, c_code, word_embs, mask)
+    print(f'Generator1 output shape: {out_code.size()}    Attention shape: {att.size()}')
+    out_code, att = g2(out_code, c_code, word_embs, mask)
+    print(f'Generator2 output shape: {out_code.size()}    Attention shape: {att.size()}')
+    return out_code, att
+
