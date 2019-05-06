@@ -3,7 +3,7 @@ from torch import nn
 from src.config import D_WORD, D_GF
 
 
-def get_img_encoder():
+def get_downscale_img_encoder():
     return nn.Sequential(
         # in: BATCH x 3 x ih x iw
         # -> BATCH x D_GF x ih/2 x iw/2
@@ -27,7 +27,7 @@ def get_img_encoder():
 class Discriminator64(nn.Module):
     def __init__(self):
         super().__init__()
-        self.img_encoder = get_img_encoder()
+        self.encoder = get_downscale_img_encoder()
 
     def forward(self, x):
-        return self.img_encoder(x)
+        return self.encoder(x)
