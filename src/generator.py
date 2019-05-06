@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 from src.Attention import Attention
+from src.encoder import CondAug
 from src.util import upsample, residual_block, conv_3x3
 
 from src.config import D_Z, D_COND, D_GF, RESIDUALS, D_HIDDEN, D_WORD
@@ -17,7 +18,8 @@ class Generator0(nn.Module):
             nn.modules.activation.GLU()
         )
 
-        self.upsample_steps = nn.Sequential(*[upsample(self.d_gf // (2 ** i), self.d_gf // (2 ** (i + 1))) for i in range(4)])
+        self.upsample_steps = nn.Sequential(
+            *[upsample(self.d_gf // (2 ** i), self.d_gf // (2 ** (i + 1))) for i in range(4)])
 
     def forward(self, z_code, c_code):
         x = torch.cat((c_code, z_code), 1)
@@ -60,3 +62,34 @@ class ImageGen(nn.Module):
 
     def forward(self, h_code):
         return self.img(h_code)
+
+
+class Generator(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.cond_aug = CondAug()
+        self.f0 = Generator0()
+        self.f1 = GeneratorN()
+        self.f2 = GeneratorN()
+        self.img0 = ImageGen()
+        self.img1 = ImageGen()
+        self.img2 = ImageGen()
+
+    def forward(self, z_code, sent_emb, word_embs, mask):
+        generated = {}
+        attention = {}
+
+        c_code, mu, logvar = self.cond_aug(sent_emb)
+
+        h1 = self.f0(z_code, c_code)
+        generated[0] = self.img0(h1)
+
+        h2, a1 = self.f1(h1, c_code, word_embs, mask)
+        generated[1] = self.img1(h2)
+        attention[1] = a1
+
+        h3, a2 = self.f2(h2, c_code, word_embs, mask)
+        generated[2] = self.img2(h3)
+        attention[2] = a2
+
+        return generated, attention, mu, logvar
