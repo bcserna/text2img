@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torchvision
 
 from src.config import D_HIDDEN, P_DROP, D_WORD, BATCH, D_COND, CUDA
+from src.util import conv1x1
 
 
 class TextEncoder(nn.Module):
@@ -43,9 +44,9 @@ class ImageEncoder(nn.Module):
         for param in self.inception_model.parameters():
             param.requires_grad = False
         # 768: the dimension of mixed_6e layer's sub-regions (768 x 289 [number of sub-regions])
-        self.local_proj = nn.Linear(768, D_HIDDEN)
+        self.local_proj = conv1x1(768, D_HIDDEN)
         # 2048: the dimension of last average pool's output
-        self.global_proj = nn.Linear(2048, D_HIDDEN)
+        self.global_proj = conv1x1(2048, D_HIDDEN)
 
         # self.local_proj.weight.data.uniform_(-IMG_WEIGHT_INIT_RANGE, IMG_WEIGHT_INIT_RANGE)
         # self.global_proj.weight.data.uniform_(-IMG_WEIGHT_INIT_RANGE, IMG_WEIGHT_INIT_RANGE)

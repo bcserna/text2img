@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import torchvision.transforms as transforms
 
-from src.config import BASE_SIZE, BRANCH_NUM, CAPTIONS, END_TOKEN, CAP_MAX_LEN
+from src.config import BASE_SIZE, BRANCH_NUM, CAPTIONS, END_TOKEN, CAP_MAX_LEN, BATCH
 
 
 class CUB(Dataset):
@@ -66,6 +66,14 @@ class CUB(Dataset):
 
         self.imsize = [BASE_SIZE * 2 ** i for i in range(BRANCH_NUM)]
 
+        self.loader = DataLoader(self, batch_size=BATCH, shuffle=True, drop_last=True, num_workers=1)
+
+        print('Loading class labels...')
+        class_labels = pd.read_csv('CUB_200_2011/image_class_labels.txt', delim_whitespace=True, header=None, index_col=0, names=['class'])
+        self.data = self.data.join(class_labels)
+
+        print('Done.')
+
     def get_caption(self, index):
         caption_idx = random.randint(0, CAPTIONS - 1)
         caption = self.captions[index][caption_idx]
@@ -106,7 +114,8 @@ class CUB(Dataset):
         index = index + 1  # Image index starts from 1
         imgs = self.get_image(index)
         caption = self.get_caption(index)
-        return imgs, caption
+        label = self.data['class'][index]
+        return imgs, caption, label
 
     def __len__(self):
         return self.data.train.sum()

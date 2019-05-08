@@ -27,3 +27,7 @@ CAP_MAX_LEN = 18
 END_TOKEN = '<END>'
 
 CUDA = False
+
+GAMMA_1 = 5.0
+GAMMA_2 = 5.0
+GAMMA_3 = 10.0
