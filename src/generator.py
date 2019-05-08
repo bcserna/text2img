@@ -3,7 +3,7 @@ from torch import nn
 
 from src.Attention import Attention
 from src.encoder import CondAug
-from src.util import upsample, residual_block, conv_3x3
+from src.util import upsample_block, residual_block, conv3x3
 
 from src.config import D_Z, D_COND, D_GF, RESIDUALS, D_HIDDEN, D_WORD
 
@@ -19,7 +19,7 @@ class Generator0(nn.Module):
         )
 
         self.upsample_steps = nn.Sequential(
-            *[upsample(self.d_gf // (2 ** i), self.d_gf // (2 ** (i + 1))) for i in range(4)])
+            *[upsample_block(self.d_gf // (2 ** i), self.d_gf // (2 ** (i + 1))) for i in range(4)])
 
     def forward(self, z_code, c_code):
         x = torch.cat((c_code, z_code), 1)
@@ -35,7 +35,7 @@ class GeneratorN(nn.Module):
         super().__init__()
         self.residuals = nn.Sequential(*[residual_block(D_GF * 2) for _ in range(RESIDUALS)])
         self.attn = Attention(D_GF, D_WORD)
-        self.upsample = upsample(D_GF * 2, D_GF)
+        self.upsample = upsample_block(D_GF * 2, D_GF)
 
     def forward(self, h_code, c_code, word_embs, mask):
         """
@@ -56,7 +56,7 @@ class ImageGen(nn.Module):
     def __init__(self):
         super().__init__()
         self.img = nn.Sequential(
-            conv_3x3(D_GF, 3),
+            conv3x3(D_GF, 3),
             nn.Tanh()
         )
 

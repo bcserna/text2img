@@ -1,13 +1,13 @@
 import torch
 from torch import nn
 
-from src.util import conv_1x1
+from src.util import conv1x1
 
 
 class Attention(nn.Module):
     def __init__(self, idf, cdf):
         super().__init__()
-        self.conv_context = conv_1x1(cdf, idf)
+        self.conv_context = conv1x1(cdf, idf)
         self.sm = nn.Softmax()
         self.mask = None
 

@@ -12,19 +12,19 @@ class Interpolate(nn.Module):
         return F.interpolate(x, scale_factor=self.factor, mode=self.mode)
 
 
-def conv_1x1(in_planes, out_planes):
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=1, padding=0, bias=False)
+def conv1x1(in_channels, out_channels):
+    return nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=False)
 
 
-def conv_3x3(in_planes, out_planes):
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=1, padding=1, bias=False)
+def conv3x3(in_channels, out_channels):
+    return nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
 
 
-def upsample(in_planes, out_planes):
+def upsample_block(in_planes, out_planes):
     return nn.Sequential(
         Interpolate(scale_factor=2, mode='nearest'),
         # nn.Upsample(scale_factor=2, mode='nearest'),
-        conv_3x3(in_planes, out_planes * 2),
+        conv3x3(in_planes, out_planes * 2),
         nn.BatchNorm2d(out_planes * 2),
         nn.modules.activation.GLU(dim=1)
     )
@@ -32,9 +32,9 @@ def upsample(in_planes, out_planes):
 
 def residual_block(channels):
     return nn.Sequential(
-        conv_3x3(channels, channels * 2),
+        conv3x3(channels, channels * 2),
         nn.BatchNorm2d(channels * 2),
         nn.modules.activation.GLU(dim=1),
-        conv_3x3(channels, channels),
+        conv3x3(channels, channels),
         nn.BatchNorm2d(channels)
     )

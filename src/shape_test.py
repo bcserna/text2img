@@ -2,6 +2,7 @@ import torch
 
 from src.config import BATCH, D_Z, D_HIDDEN, D_COND, D_GF, D_WORD, CAP_MAX_LEN
 from src.data import CUB
+from src.discriminator import Discriminator64, Discriminator128
 from src.encoder import TextEncoder, ImageEncoder
 from src.generator import Generator0, GeneratorN, ImageGen, Generator
 
@@ -81,3 +82,11 @@ def test_run_generator():
 
     print(f'Mu shape: {mu.size()}    logvar shape: {logvar.size()}')
     return gen, att, mu, logvar
+
+
+def test_run_discriminator128():
+    d = Discriminator128()
+    x = torch.randn(BATCH, 3, 128, 128)
+    o = d(x)
+    print(f'Discriminator128 output shape: {o.size()}')
+    return o
