@@ -74,10 +74,10 @@ class Discriminator256(nn.Module):
         self.encoder64_2 = conv3x3_LReLU(D_GF * 16, D_GF * 8)
 
     def forward(self, x):
-        x = self.downscale_encoder_16(x)
-        x = self.downscale_encoder_32(x)
-        x = self.downscale_encoder_64(x)
-        x = self.encoder64(x)
-        x = self.encoder64_2(x)
+        x = self.downscale_encoder_16(x)  # -> BATCH x D_GF*8 x 16 x 16
+        x = self.downscale_encoder_32(x)  # -> BATCH x D_GF*16 x 8 x 8
+        x = self.downscale_encoder_64(x)  # -> BATCH x D_GF*32 x 4 x 4
+        x = self.encoder64(x)  # -> BATCH x D_GF*16 x 4 x 4
+        x = self.encoder64_2(x)  # -> BATCH x D_GF*8 x 4 x 4
         return x
 
