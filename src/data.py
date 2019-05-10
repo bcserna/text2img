@@ -7,6 +7,7 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import torchvision.transforms as transforms
+from tqdm import tqdm
 
 from src.config import BASE_SIZE, BRANCH_NUM, CAPTIONS, END_TOKEN, CAP_LEN, BATCH
 
@@ -66,12 +67,17 @@ class CUB(Dataset):
 
         self.imsize = [BASE_SIZE * 2 ** i for i in range(BRANCH_NUM)]
 
-        self.loader = DataLoader(self, batch_size=BATCH, shuffle=True, drop_last=True, num_workers=1)
+        self.loader = DataLoader(self, batch_size=BATCH, shuffle=True, drop_last=True, num_workers=1,
+                                 collate_fn=self.collate_fn)
 
         print('Loading class labels...')
-        class_labels = pd.read_csv('CUB_200_2011/image_class_labels.txt', delim_whitespace=True, header=None, index_col=0, names=['class'])
+        class_labels = pd.read_csv('CUB_200_2011/image_class_labels.txt', delim_whitespace=True, header=None,
+                                   index_col=0, names=['class'])
         self.data = self.data.join(class_labels)
 
+        # print('Loading images...')
+        self.images = []
+        # self.load_images()
         print('Done.')
 
     def get_caption(self, index):
@@ -85,8 +91,11 @@ class CUB(Dataset):
         return encoded[:CAP_LEN]
 
     def get_image(self, index):
+        if self.images:
+            return self.images[index]
+
         img_data = self.data.loc[index, :]
-        img = Image.open('CUB_200_2011/images/' + img_data.img_path)
+        img = Image.open('CUB_200_2011/images/' + img_data.img_path).convert('RGB')
         width, height = img.size
 
         r = int(np.maximum(img_data.bbox_width, img_data.bbox_height) * 0.75)
@@ -110,6 +119,9 @@ class CUB(Dataset):
 
         return imgs
 
+    def load_images(self):
+        self.images = [self.get_image(i) for i in tqdm(range(1, len(self)))]
+
     def __getitem__(self, index):
         index = index + 1  # Image index starts from 1
         imgs = self.get_image(index)
@@ -119,3 +131,20 @@ class CUB(Dataset):
 
     def __len__(self):
         return self.data.train.sum()
+
+    @staticmethod
+    def collate_fn(batch):
+        ret = {
+            'img64': [],
+            'img128': [],
+            'img256': [],
+            'caption': [],
+            'label': []
+        }
+        for img, cap, label in batch:
+            ret['img64'].append(img[0])
+            ret['img128'].append(img[1])
+            ret['img256'].append(img[2])
+            ret['caption'].append(cap)
+            ret['label'].append(label)
+        return ret
