@@ -20,7 +20,7 @@ def get_class_masks(cls_labels):
     for i, l in enumerate(cls_labels):
         mask = cls_labels == l
         mask[i] = 0
-        masks.append(mask.reshape((1, -1)))
+        masks.append(mask)
     masks = torch.ByteTensor(masks)
     if CUDA:
         masks = masks.cuda()
@@ -41,7 +41,7 @@ class DAMSM:
         sent_loss2 = 0
 
     @staticmethod
-    def sentence_loss(img_code, sent_code, cls_labels, origin_labels, eps=1e-8):
+    def sentence_loss(img_code, sent_code, cls_labels, img_cap_pair_label, eps=1e-8):
         # in: img_code, sent_code -> BATCH x D_HIDDEN
         # mask samples belonging to the same class
         masks = get_class_masks(cls_labels)
@@ -54,17 +54,19 @@ class DAMSM:
         norm = img_norm @ sent_norm.transpose(0, 1)  # -> BATCH x BATCH
         scores1 = scores1 / norm.clamp(min=eps) * GAMMA_3  # -> BATCH x BATCH
 
+        print(f'scores1: {scores1.size()}, norm: {norm.size()}, masks: {masks.size()}')
+
         scores1.data.masked_fill_(masks, -float('inf'))
         scores2 = scores1.transpose(0, 1)
 
         # nn.CrossEntropyLoss has builtin softmax
-        loss1 = nn.CrossEntropyLoss()(scores1, origin_labels)
-        loss2 = nn.CrossEntropyLoss()(scores2, origin_labels)
+        loss1 = nn.CrossEntropyLoss()(scores1, img_cap_pair_label)
+        loss2 = nn.CrossEntropyLoss()(scores2, img_cap_pair_label)
 
         return loss1, loss2
 
     @staticmethod
-    def words_loss(img_features, word_embs, cls_labels, origin_labels):
+    def words_loss(img_features, word_embs, cls_labels, img_cap_pair_label):
         # img_features (local features of the image): BATCH x D_HIDDEN x 17 x 17
         # word_embs: BATCH x D_HIDDEN x CAP_LEN
 
@@ -97,7 +99,7 @@ class DAMSM:
         similarities.data.masked_fill_(masks, -float('inf'))
 
         similarities2 = similarities.transpose(0, 1)
-        loss1 = nn.CrossEntropyLoss()(similarities, origin_labels)
-        loss2 = nn.CrossEntropyLoss()(similarities2, origin_labels)
+        loss1 = nn.CrossEntropyLoss()(similarities, img_cap_pair_label)
+        loss2 = nn.CrossEntropyLoss()(similarities2, img_cap_pair_label)
 
         return loss1, loss2, att_maps
