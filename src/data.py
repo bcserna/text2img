@@ -8,7 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import torchvision.transforms as transforms
 
-from src.config import BASE_SIZE, BRANCH_NUM, CAPTIONS, END_TOKEN, CAP_MAX_LEN, BATCH
+from src.config import BASE_SIZE, BRANCH_NUM, CAPTIONS, END_TOKEN, CAP_LEN, BATCH
 
 
 class CUB(Dataset):
@@ -79,10 +79,10 @@ class CUB(Dataset):
         caption = self.captions[index][caption_idx]
         encoded = [self.vocab[w] for w in caption.split()]
         cap_len = len(encoded)
-        if cap_len < CAP_MAX_LEN:
-            encoded = encoded + [self.vocab[END_TOKEN] for _ in range(CAP_MAX_LEN - cap_len)]
+        if cap_len < CAP_LEN:
+            encoded = encoded + [self.vocab[END_TOKEN] for _ in range(CAP_LEN - cap_len)]
 
-        return encoded[:CAP_MAX_LEN]
+        return encoded[:CAP_LEN]
 
     def get_image(self, index):
         img_data = self.data.loc[index, :]
