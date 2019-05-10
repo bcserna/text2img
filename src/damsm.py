@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import numpy as np
 
-from src.config import GAMMA_3
+from src.config import GAMMA_3, CUDA, BATCH
 from src.encoder import ImageEncoder, TextEncoder
 
 
@@ -11,6 +11,20 @@ def cos_sim(x1, x2, dim=1, eps=1e-8):
     w1 = torch.norm(x1, 2, dim)
     w2 = torch.norm(x2, 2, dim)
     return (w12 / (w1 * w2).clamp(min=eps)).squeeze()
+
+
+def get_class_masks(cls_labels):
+    masks = []
+    cls_labels = np.asarray(cls_labels)
+    for i, l in enumerate(cls_labels):
+        mask = cls_labels == l
+        mask[i] = 0
+        masks.append(mask.reshape((1, -1)))
+    masks = torch.ByteTensor(masks)
+    if CUDA:
+        masks = masks.cuda()
+
+    return masks
 
 
 class DAMSM:
@@ -29,20 +43,14 @@ class DAMSM:
     def sentence_loss(img_code, sent_code, cls_labels, origin_labels, eps=1e-8):
         # in: img_code, sent_code -> BATCH x D_HIDDEN
         # mask samples belonging to the same class
-        masks = []
-        cls_labels = np.asarray(cls_labels)
-        for i, l in enumerate(cls_labels):
-            mask = cls_labels == l
-            mask[i] = 0
-            masks.append(mask)
-        masks = torch.ByteTensor(masks)  # TODO cuda!
+        masks = get_class_masks(cls_labels)
 
         # -> BATCH x 1
         img_norm = img_code.norm(p=2, dim=1, keepdim=True)
         sent_norm = sent_code.norm(p=2, dim=1, keepdim=True)
 
-        scores1 = img_code @ sent_code.transpose(0,1)  # -> BATCH x BATCH
-        norm = img_norm @ sent_norm.transpose(0,1)  # -> BATCH x BATCH
+        scores1 = img_code @ sent_code.transpose(0, 1)  # -> BATCH x BATCH
+        norm = img_norm @ sent_norm.transpose(0, 1)  # -> BATCH x BATCH
         scores1 = scores1 / norm.clamp(min=eps) * GAMMA_3  # -> BATCH x BATCH
 
         scores1.data.masked_fill_(masks, -float('inf'))
@@ -54,5 +62,11 @@ class DAMSM:
 
         return loss1, loss2
 
+    @staticmethod
+    def words_loss(img_features, word_embs, cls_labels, origin_labels):
+        # img_features: BATCH x D_HIDDEN x 17 x 17
+        # word_embs: BATCH x D_HIDDEN x cap_len
+        masks = get_class_masks(cls_labels)
 
-    def words_loss(self):
+        for i in range(BATCH):
+

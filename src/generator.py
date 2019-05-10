@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from src.Attention import Attention
+from src.attention import Attention
 from src.encoder import CondAug
 from src.util import upsample_block, residual_block, conv3x3
 
