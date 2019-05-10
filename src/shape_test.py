@@ -27,8 +27,7 @@ def test_run_encoders():
     high_res_imgs = torch.stack([i[2] for i in img_samples])
     img_local, img_global = img_encoder(high_res_imgs)
     print(f'encoded image local features\' shape: {img_local.size()}    global features\' shape: {img_global.size()}')
-    print(
-        f'encoded text shape: {txt_out.size()}    hidden shape: {txt_hidden[0].size()}    cell shape: {txt_hidden[1].size()}')
+    print(f'word emb shape shape: {txt_out.size()}    sentence emb shape: {txt_hidden.size()}')
     return txt_out, txt_hidden, img_local, img_global
 
 

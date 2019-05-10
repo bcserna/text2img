@@ -21,19 +21,17 @@ class TextEncoder(nn.Module):
         # Initial cell and hidden state for each sequence
         self.hidden0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True)
         self.cell0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True)
+        self.init_hidden = self.hidden0.repeat(2, BATCH, 1)
+        self.init_cell = self.cell0.repeat(2, BATCH, 1)
 
     def forward(self, x):
-        # sort = np.argsort(cap_lens)[::-1]
-        # cap_lens = np.asarray(cap_lens)[sort]
-        # x = np.asarray(x)[sort]
-
         e = self.embed(torch.tensor(x, dtype=torch.int64))
         e = self.emb_dropout(e)
-        # e = pack_padded_sequence(e, cap_lens, batch_first=True)
-        out, hidden = self.rnn(e, (self.hidden0.repeat(2, BATCH, 1), self.cell0.repeat(2, BATCH, 1)))
-        # words_repr = pad_packed_sequence(out, batch_first=True)[0]
-        # words_repr = out.transpose(1, 2)
-        return out, hidden
+        word_embs, hidden = self.rnn(e, (self.init_hidden, self.init_cell))
+        word_embs = word_embs.transpose(1, 2)  # -> BATCH x D_HIDDEN x seq_len
+        sent_embs = hidden[0].transpose(0, 1).contiguous()  # -> BATCH x 2 x D_HIDDEN/2
+        sent_embs = sent_embs.view(BATCH, -1)  # -> BATCH x D_HIDDEN
+        return word_embs, sent_embs
 
 
 class ImageEncoder(nn.Module):
@@ -43,10 +41,10 @@ class ImageEncoder(nn.Module):
         # Freeze Inception V3 parameters
         for param in self.inception_model.parameters():
             param.requires_grad = False
-        # 768: the dimension of mixed_6e layer's sub-regions (768 x 289 [number of sub-regions])
+        # 768: the dimension of mixed_6e layer's sub-regions (768 x 289 [number of sub-regions, 17 x 17])
         self.local_proj = conv1x1(768, D_HIDDEN)
         # 2048: the dimension of last average pool's output
-        self.global_proj = conv1x1(2048, D_HIDDEN)
+        self.global_proj = nn.Linear(2048, D_HIDDEN)
 
         # self.local_proj.weight.data.uniform_(-IMG_WEIGHT_INIT_RANGE, IMG_WEIGHT_INIT_RANGE)
         # self.global_proj.weight.data.uniform_(-IMG_WEIGHT_INIT_RANGE, IMG_WEIGHT_INIT_RANGE)
@@ -89,7 +87,7 @@ class ImageEncoder(nn.Module):
         x = self.inception_model.Mixed_6e(x)
         # 17 x 17 x 768
 
-        local_features = x.view(-1, 289, 768)
+        local_features = x
         # 289 x 768
 
         # 17 x 17 x 768
