@@ -25,8 +25,10 @@ class DAMSM:
         sent_loss1 = 0
         sent_loss2 = 0
 
-    def sentence_loss(self, img_code, sent_code, cls_labels, origin_labels, eps=1e-8):
+    @staticmethod
+    def sentence_loss(img_code, sent_code, cls_labels, origin_labels, eps=1e-8):
         # in: img_code, sent_code -> BATCH x D_HIDDEN
+        # mask samples belonging to the same class
         masks = []
         cls_labels = np.asarray(cls_labels)
         for i, l in enumerate(cls_labels):
@@ -35,25 +37,22 @@ class DAMSM:
             masks.append(mask)
         masks = torch.ByteTensor(masks)  # TODO cuda!
 
-        # -> 1 x BATCH X D_HIDDEN
-        img_code = img_code.unsqueeze(0)
-        sent_code = sent_code.unsqueeze(0)
+        # -> BATCH x 1
+        img_norm = img_code.norm(p=2, dim=1, keepdim=True)
+        sent_norm = sent_code.norm(p=2, dim=1, keepdim=True)
 
-        # -> 1 x BATCH x 1
-        img_norm = torch.norm(img_code, 2, dim=2, keepdim=True)
-        sent_norm = torch.norm(sent_code, 2, dim=2, keepdim=True)
+        scores1 = img_code @ sent_code.transpose(0,1)  # -> BATCH x BATCH
+        norm = img_norm @ sent_norm.transpose(0,1)  # -> BATCH x BATCH
+        scores1 = scores1 / norm.clamp(min=eps) * GAMMA_3  # -> BATCH x BATCH
 
-        scores1 = torch.bmm(img_code, sent_code.transpose(1, 2))  # -> 1 x BATCH x BATCH
-        norm = torch.bmm(img_norm, sent_norm.transpose(1, 2))  # -> 1 x BATCH x BATCH
-        scores1 = scores1 / norm.clamp(min=eps) * GAMMA_3  # -> 1 x BATCH x BATCH
-
-        scores1 = scores1.squeeze()  # -> BATCH x BATCH
         scores1.data.masked_fill_(masks, -float('inf'))
-
         scores2 = scores1.transpose(0, 1)
 
-        # CrossEntropyLoss has builtin softmax
+        # nn.CrossEntropyLoss has builtin softmax
         loss1 = nn.CrossEntropyLoss()(scores1, origin_labels)
         loss2 = nn.CrossEntropyLoss()(scores2, origin_labels)
 
         return loss1, loss2
+
+
+    def words_loss(self):
