@@ -1,6 +1,9 @@
 import torch
+from torch import nn
+from torch.autograd import Variable
 
 from src.config import BATCH, D_Z, D_HIDDEN, D_COND, D_GF, D_WORD, CAP_LEN
+from src.damsm import DAMSM
 from src.data import CUB
 from src.discriminator import Discriminator64, Discriminator128, Discriminator256
 from src.encoder import TextEncoder, ImageEncoder
@@ -97,3 +100,37 @@ def test_run_discriminator256():
     o = d(x)
     print(f'Discriminator256 output shape: {o.size()}')
     return o
+
+
+def test_run_damsm_losses():
+    data = CUB()
+    text_enc = TextEncoder(len(data.vocab))
+    img_enc = ImageEncoder()
+    for batch in data.loader:
+        img64 = batch['img64']
+        img128 = batch['img128']
+        img256 = batch['img256']
+        cap = batch['caption']
+        label = batch['label']
+        print(
+            f'batch len: {len(batch)}',
+            f'img64 shape: {img64.size()}',
+            f'img128 shape: {img128.size()}',
+            f'img256 shape: {img256.size()}',
+            f'caption shape: {len(cap)} x {len(cap[0])}',
+            f'label shape: {len(label)}',
+            sep='\n'
+        )
+
+        img_code = img_enc(img256)
+        print(f'local image features: {img_code[0].size()}    global image features: {img_code[1].size()}')
+        text_code = text_enc(cap)
+        print(f'word embeddings: {text_code[0].size()}    sentence embedding: {text_code[1].size()}')
+
+        # img_cap_pair_label = nn.Parameter(torch.LongTensor(range(BATCH)))
+        img_cap_pair_label = Variable(torch.LongTensor(range(BATCH)))
+        sent_loss = DAMSM.sentence_loss(img_code[1], text_code[1], label, img_cap_pair_label)
+        print(f'sentence loss 1: {sent_loss[0]}    sentence loss 2: {sent_loss[1]}')
+        words_loss = DAMSM.words_loss(img_code[0], text_code[0], label, img_cap_pair_label)
+        print(f'words loss 1: {words_loss[0]}    words loss 2: {words_loss[1]}')
+        return

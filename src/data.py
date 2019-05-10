@@ -3,6 +3,8 @@ import random
 import pandas as pd
 import pickle
 import re
+
+import torch
 from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
@@ -147,4 +149,8 @@ class CUB(Dataset):
             ret['img256'].append(img[2])
             ret['caption'].append(cap)
             ret['label'].append(label)
+
+        ret['img64'] = torch.stack(ret['img64'])
+        ret['img128'] = torch.stack(ret['img128'])
+        ret['img256'] = torch.stack(ret['img256'])
         return ret
