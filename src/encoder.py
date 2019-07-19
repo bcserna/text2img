@@ -21,6 +21,7 @@ class TextEncoder(nn.Module):
         # Initial cell and hidden state for each sequence
         self.hidden0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True)
         self.cell0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True)
+        # Different initial hidden state for different directions?
         self.init_hidden = self.hidden0.repeat(2, BATCH, 1)
         self.init_cell = self.cell0.repeat(2, BATCH, 1)
 

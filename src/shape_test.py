@@ -113,7 +113,6 @@ def test_run_damsm_losses():
         cap = batch['caption']
         label = batch['label']
         print(
-            f'batch len: {len(batch)}',
             f'img64 shape: {img64.size()}',
             f'img128 shape: {img128.size()}',
             f'img256 shape: {img256.size()}',
@@ -127,8 +126,7 @@ def test_run_damsm_losses():
         text_code = text_enc(cap)
         print(f'word embeddings: {text_code[0].size()}    sentence embedding: {text_code[1].size()}')
 
-        # img_cap_pair_label = nn.Parameter(torch.LongTensor(range(BATCH)))
-        img_cap_pair_label = Variable(torch.LongTensor(range(BATCH)))
+        img_cap_pair_label = nn.Parameter(torch.LongTensor(range(BATCH)), requires_grad=False)
         sent_loss = DAMSM.sentence_loss(img_code[1], text_code[1], label, img_cap_pair_label)
         print(f'sentence loss 1: {sent_loss[0]}    sentence loss 2: {sent_loss[1]}')
         words_loss = DAMSM.words_loss(img_code[0], text_code[0], label, img_cap_pair_label)

@@ -1,6 +1,9 @@
 import torch
 from torch import nn
 import numpy as np
+import time
+
+from tqdm import tqdm
 
 from src.attention import func_attention
 from src.config import GAMMA_3, CUDA, BATCH, GAMMA_1, CAP_LEN, GAMMA_2
@@ -35,10 +38,38 @@ class DAMSM:
     def train(self, data, labels):
         img_enc = ImageEncoder()
         txt_enc = TextEncoder(vocab_size=len(data.vocab))
+
+        img_enc.train(), txt_enc.train()
+
+        params = list(txt_enc.parameters())
+        for v in img_enc.parameters():
+            if v.requires_grad:
+                params.append(v)
+        optim = torch.optim.Adam(params, lr=2e-4, betas=(0.5, 0.999))
         word_loss1 = 0
         word_loss2 = 0
         sent_loss1 = 0
         sent_loss2 = 0
+
+        start_time = time.time()
+        img_cap_pair_labels = nn.Parameter(torch.LongTensor(range(BATCH)), requires_grad=False)
+        for step, batch in enumerate(tqdm(data.loader)):
+            img_enc.zero_grad()
+            txt_enc.zero_grad()
+
+            img_local, img_global = img_enc(batch['img256'])
+            word_emb, sent_emb = txt_enc(batch['caption'])
+
+            w1_loss, w2_loss, _ = self.words_loss(img_local, word_emb, batch['label'], img_cap_pair_labels)
+            s1_loss, s2_loss = self.sentence_loss(img_global, sent_emb, batch['label'], img_cap_pair_labels)
+
+            loss = w1_loss + w2_loss + s1_loss + s2_loss
+
+            loss.backward(retain_graph=True)
+            torch.nn.utils.clip_grad_norm(txt_enc.parameters(), 0.25)
+            optim.step()
+
+            tqdm.write(f'\nw1: {w1_loss}    w2: {w2_loss}    s1: {s1_loss}    s2: {s2_loss}    total: {loss}')
 
     @staticmethod
     def sentence_loss(img_code, sent_code, cls_labels, img_cap_pair_label, eps=1e-8):
@@ -53,8 +84,6 @@ class DAMSM:
         scores1 = img_code @ sent_code.transpose(0, 1)  # -> BATCH x BATCH
         norm = img_norm @ sent_norm.transpose(0, 1)  # -> BATCH x BATCH
         scores1 = scores1 / norm.clamp(min=eps) * GAMMA_3  # -> BATCH x BATCH
-
-        print(f'scores1: {scores1.size()}, norm: {norm.size()}, masks: {masks.size()}')
 
         scores1.data.masked_fill_(masks, -float('inf'))
         scores2 = scores1.transpose(0, 1)
