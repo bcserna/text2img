@@ -10,6 +10,7 @@ from src.util import conv1x1
 class TextEncoder(nn.Module):
     def __init__(self, vocab_size):
         super().__init__()
+        self.vocab_size = vocab_size
         self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=D_WORD)
         self.emb_dropout = nn.Dropout(P_DROP)
         self.rnn = nn.LSTM(

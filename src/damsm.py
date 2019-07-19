@@ -2,7 +2,8 @@ import torch
 from torch import nn
 import numpy as np
 import time
-
+import os
+import pickle
 from tqdm import tqdm
 
 from src.attention import func_attention
@@ -32,17 +33,15 @@ def get_class_masks(cls_labels):
 
 
 class DAMSM:
-    def __init__(self):
-        pass
+    def __init__(self, vocab_size):
+        self.img_enc = ImageEncoder()
+        self.txt_enc = TextEncoder(vocab_size=vocab_size)
 
-    def train(self, data, labels):
-        img_enc = ImageEncoder()
-        txt_enc = TextEncoder(vocab_size=len(data.vocab))
+    def train(self):
+        self.img_enc.train(), self.txt_enc.train()
 
-        img_enc.train(), txt_enc.train()
-
-        params = list(txt_enc.parameters())
-        for v in img_enc.parameters():
+        params = list(self.txt_enc.parameters())
+        for v in self.img_enc.parameters():
             if v.requires_grad:
                 params.append(v)
         optim = torch.optim.Adam(params, lr=2e-4, betas=(0.5, 0.999))
@@ -53,12 +52,12 @@ class DAMSM:
 
         start_time = time.time()
         img_cap_pair_labels = nn.Parameter(torch.LongTensor(range(BATCH)), requires_grad=False)
-        for step, batch in enumerate(tqdm(data.loader)):
-            img_enc.zero_grad()
-            txt_enc.zero_grad()
+        for step, batch in enumerate(tqdm(self.data.loader)):
+            self.img_enc.zero_grad()
+            self.txt_enc.zero_grad()
 
-            img_local, img_global = img_enc(batch['img256'])
-            word_emb, sent_emb = txt_enc(batch['caption'])
+            img_local, img_global = self.img_enc(batch['img256'])
+            word_emb, sent_emb = self.txt_enc(batch['caption'])
 
             w1_loss, w2_loss, _ = self.words_loss(img_local, word_emb, batch['label'], img_cap_pair_labels)
             s1_loss, s2_loss = self.sentence_loss(img_global, sent_emb, batch['label'], img_cap_pair_labels)
@@ -66,10 +65,29 @@ class DAMSM:
             loss = w1_loss + w2_loss + s1_loss + s2_loss
 
             loss.backward(retain_graph=True)
-            torch.nn.utils.clip_grad_norm(txt_enc.parameters(), 0.25)
+            torch.nn.utils.clip_grad_norm(self.txt_enc.parameters(), 0.25)
             optim.step()
 
             tqdm.write(f'\nw1: {w1_loss}    w2: {w2_loss}    s1: {s1_loss}    s2: {s2_loss}    total: {loss}')
+
+    def save(self, name):
+        save_dir = 'models'
+        os.makedirs(save_dir, exist_ok=True)
+        torch.save(self.txt_enc.state_dict(), f'{save_dir}/{name}_text_enc.pt')
+        torch.save(self.img_enc.state_dict(), f'{save_dir}/{name}_img_enc.pt')
+        config = {'vocab_size': self.txt_enc.vocab_size}
+        with open(f'{save_dir}/{name}_config.pkl', 'wb') as f:
+            pickle.dump(config, f)
+
+    @staticmethod
+    def load(name):
+        load_dir = 'models'
+        with open(f'{load_dir}/{name}_config.pkl', 'rb') as f:
+            config = pickle.load(f)
+        damsm = DAMSM(config['vocab_size'])
+        damsm.txt_enc.load_state_dict(torch.load(f'{load_dir}/{name}_text_enc.pt'))
+        damsm.img_enc.load_state_dict(torch.load(f'{load_dir}/{name}_img_enc.pt'))
+        return damsm
 
     @staticmethod
     def sentence_loss(img_code, sent_code, cls_labels, img_cap_pair_label, eps=1e-8):
