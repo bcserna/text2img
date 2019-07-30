@@ -1,13 +1,14 @@
+import json
+
 import torch
 from torch import nn
 import numpy as np
 import time
 import os
-import pickle
 from tqdm import tqdm
 
 from src.attention import func_attention
-from src.config import GAMMA_3, CUDA, BATCH, GAMMA_1, CAP_LEN, GAMMA_2
+from src.config import GAMMA_3, CUDA, BATCH, GAMMA_1, CAP_LEN, GAMMA_2, DEVICE
 from src.encoder import ImageEncoder, TextEncoder
 
 
@@ -33,9 +34,9 @@ def get_class_masks(cls_labels):
 
 
 class DAMSM:
-    def __init__(self, vocab_size):
-        self.img_enc = ImageEncoder()
-        self.txt_enc = TextEncoder(vocab_size=vocab_size)
+    def __init__(self, vocab_size, device=DEVICE):
+        self.img_enc = ImageEncoder().to(device)
+        self.txt_enc = TextEncoder(vocab_size=vocab_size).to(device)
 
     def train(self):
         self.img_enc.train(), self.txt_enc.train()
@@ -76,14 +77,14 @@ class DAMSM:
         torch.save(self.txt_enc.state_dict(), f'{save_dir}/{name}_text_enc.pt')
         torch.save(self.img_enc.state_dict(), f'{save_dir}/{name}_img_enc.pt')
         config = {'vocab_size': self.txt_enc.vocab_size}
-        with open(f'{save_dir}/{name}_config.pkl', 'wb') as f:
-            pickle.dump(config, f)
+        with open(f'{save_dir}/{name}_config.json', 'w') as f:
+            json.dump(config, f)
 
     @staticmethod
     def load(name):
         load_dir = 'models'
-        with open(f'{load_dir}/{name}_config.pkl', 'rb') as f:
-            config = pickle.load(f)
+        with open(f'{load_dir}/{name}_config.json', 'r') as f:
+            config = json.load(f)
         damsm = DAMSM(config['vocab_size'])
         damsm.txt_enc.load_state_dict(torch.load(f'{load_dir}/{name}_text_enc.pt'))
         damsm.img_enc.load_state_dict(torch.load(f'{load_dir}/{name}_img_enc.pt'))
