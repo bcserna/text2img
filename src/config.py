@@ -1,4 +1,4 @@
-D_GF = 128
+D_GF = 32
 D_DF = 64
 
 RESIDUALS = 2
@@ -25,9 +25,13 @@ CAPTIONS = 10
 CAP_LEN = 18
 
 END_TOKEN = '<END>'
+UNK_TOKEN = '<UNK>'
 
 CUDA = False
+DEVICE = 'cuda'
 
 GAMMA_1 = 5.0
 GAMMA_2 = 5.0
 GAMMA_3 = 10.0
+
+MIN_WORD_FREQ = 3
