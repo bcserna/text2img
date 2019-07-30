@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 import torchvision
 
-from src.config import D_HIDDEN, P_DROP, D_WORD, BATCH, D_COND, CUDA
+from src.config import D_HIDDEN, P_DROP, D_WORD, BATCH, D_COND, CUDA, IMG_WEIGHT_INIT_RANGE
 from src.util import conv1x1
 
 
@@ -48,8 +48,8 @@ class ImageEncoder(nn.Module):
         # 2048: the dimension of last average pool's output
         self.global_proj = nn.Linear(2048, D_HIDDEN)
 
-        # self.local_proj.weight.data.uniform_(-IMG_WEIGHT_INIT_RANGE, IMG_WEIGHT_INIT_RANGE)
-        # self.global_proj.weight.data.uniform_(-IMG_WEIGHT_INIT_RANGE, IMG_WEIGHT_INIT_RANGE)
+        self.local_proj.weight.data.uniform_(-IMG_WEIGHT_INIT_RANGE, IMG_WEIGHT_INIT_RANGE)
+        self.global_proj.weight.data.uniform_(-IMG_WEIGHT_INIT_RANGE, IMG_WEIGHT_INIT_RANGE)
 
     def forward(self, x):
         # --> fixed-size input: batch x 3 x 299 x 299
