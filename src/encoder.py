@@ -17,7 +17,7 @@ class TextEncoder(nn.Module):
             input_size=D_WORD,
             hidden_size=D_HIDDEN // 2,  # bidirectional
             batch_first=True,
-            # dropout=P_DROP,
+            dropout=P_DROP,
             bidirectional=True)
         # Initial cell and hidden state for each sequence
         self.hidden0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True)
