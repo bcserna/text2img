@@ -40,7 +40,7 @@ class DAMSM(object):
         self.img_enc = ImageEncoder().to(device)
         self.txt_enc = TextEncoder(vocab_size=vocab_size).to(device)
 
-    def train(self, dataset, batch_size=BATCH, eval_every=20):
+    def train(self, dataset, batch_size=BATCH, eval_every=20, epoch=30):
         train_loader = DataLoader(dataset.train, batch_size=batch_size, shuffle=True, drop_last=False,
                                   collate_fn=dataset.collate_fn)
         test_loader = DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=False,
@@ -57,38 +57,38 @@ class DAMSM(object):
 
         losses = {'train': [], 'test': []}
 
-        train_pbar = tqdm(train_loader, leave=True, desc='Training')
-        for step, batch in enumerate(train_pbar):
+        for _ in tqdm(range(epoch), desc='Epochs', leave=True):
             self.img_enc.train(), self.txt_enc.train()
-            self.img_enc.zero_grad(), self.txt_enc.zero_grad()
+            train_pbar = tqdm(train_loader, leave=False, desc='Training')
+            for step, batch in enumerate(train_pbar):
+                self.img_enc.zero_grad(), self.txt_enc.zero_grad()
 
-            loss, w1_loss, w2_loss, s1_loss, s2_loss = self.batch_loss(batch, img_cap_pair_labels)
-            train_pbar.set_description(
-                f'Training (total: {loss}  w1: {w1_loss}  w2: {w2_loss}  s1: {s1_loss}  s2: {s2_loss})')
+                loss, w1_loss, w2_loss, s1_loss, s2_loss = self.batch_loss(batch, img_cap_pair_labels)
+                train_pbar.set_description(
+                    f'Training (total: {loss}  w1: {w1_loss}  w2: {w2_loss}  s1: {s1_loss}  s2: {s2_loss})')
 
-            loss.backward(retain_graph=True)
-            torch.nn.utils.clip_grad_norm(self.txt_enc.parameters(), 0.25)
-            optim.step()
+                loss.backward(retain_graph=True)
+                torch.nn.utils.clip_grad_norm(self.txt_enc.parameters(), 0.25)
+                optim.step()
 
-            if step % eval_every == eval_every - 1:
-                self.img_enc.eval(), self.txt_enc.eval()
-                with torch.no_grad():
-                    avg_train_loss = 0
-                    avg_test_loss = 0
-                    for i, batch in enumerate(tqdm(train_loader, leave=True, desc='Evaluating training set')):
-                        loss = self.batch_loss(batch, img_cap_pair_labels)[0]
-                        avg_train_loss += loss
+            self.img_enc.eval(), self.txt_enc.eval()
+            with torch.no_grad():
+                avg_train_loss = 0
+                avg_test_loss = 0
+                for i, batch in enumerate(tqdm(train_loader, leave=True, desc='Evaluating training set')):
+                    loss = self.batch_loss(batch, img_cap_pair_labels)[0]
+                    avg_train_loss += loss
 
-                    for i, batch in enumerate(tqdm(test_loader, leave=True, desc='Evaluating test set')):
-                        loss = self.batch_loss(batch, img_cap_pair_labels)[0]
-                        avg_test_loss += loss
+                for i, batch in enumerate(tqdm(test_loader, leave=True, desc='Evaluating test set')):
+                    loss = self.batch_loss(batch, img_cap_pair_labels)[0]
+                    avg_test_loss += loss
 
-                    avg_train_loss /= len(train_loader)
-                    avg_test_loss /= len(test_loader)
-                    losses['train'].append(avg_train_loss)
-                    losses['test'].append(avg_test_loss)
-                    tqdm.write(f'Train loss after batch {step}: {avg_train_loss}')
-                    tqdm.write(f'Test loss after batch {step}: {avg_test_loss}')
+                avg_train_loss /= len(train_loader)
+                avg_test_loss /= len(test_loader)
+                losses['train'].append(avg_train_loss)
+                losses['test'].append(avg_test_loss)
+                tqdm.write(f'Train loss after batch {step}: {avg_train_loss}')
+                tqdm.write(f'Test loss after batch {step}: {avg_test_loss}')
 
         return losses
 
