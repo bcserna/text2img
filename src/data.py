@@ -11,30 +11,30 @@ import numpy as np
 import torchvision.transforms as transforms
 from tqdm import tqdm
 
-from src.config import BASE_SIZE, BRANCH_NUM, CAPTIONS, END_TOKEN, CAP_LEN, BATCH, MIN_WORD_FREQ, UNK_TOKEN
+from src.config import BASE_SIZE, BRANCH_NUM, CAPTIONS, END_TOKEN, CAP_MAX_LEN, BATCH, MIN_WORD_FREQ, UNK_TOKEN
 
 
 class CUBSubset(Dataset):
-    def __init__(self, subset, img_size, transformations, normalize, preload):
+    def __init__(self, subset, vocab, img_size, transformations, normalize, preload=False):
         self.data = subset
+        self.vocab = vocab
         self.img_size = img_size
         self.transforms = transformations
         self.normalize = normalize
         self.images = None
         if preload:
-            self.load_images()
+            self.images = self.load_images()
 
     def load_images(self):
-        self.images = [self.get_image(i) for i in tqdm(range(1, len(self)), desc='Preloading images')]
+        # self.images = [self.get_image(i) for i in tqdm(range(1, len(self)), desc='Preloading images')]
+        for i in tqdm(range(1, len(self)), desc='Preloading images'):
+            yield self.get_image(i)
 
     def __getitem__(self, index):
-        if self.images is not None:
-            return self.images[index + 1]
-
-        index = index + 1  # Image index starts from 1
+        # index = index + 1  # Image index starts from 1
         imgs = self.get_image(index)
         caption = self.get_caption(index)
-        label = self.data['class'][index]
+        label = self.data['class'].iloc[index]
         return imgs, caption, label
 
     def __len__(self):
@@ -42,15 +42,19 @@ class CUBSubset(Dataset):
 
     def get_caption(self, index):
         caption_idx = random.randint(0, CAPTIONS - 1)
-        caption = self.captions[index][caption_idx]
-        encoded = [self.vocab[w] for w in caption.split()]
+        # caption = self.captions[index][caption_idx]
+        caption = self.data[f'caption_{caption_idx}'].iloc[index]
+        encoded = [self.vocab.get(w, self.vocab[UNK_TOKEN]) for w in caption.split()]
+        encoded = encoded[:CAP_MAX_LEN - 1]  # address END token
         cap_len = len(encoded)
-        encoded = encoded[:CAP_LEN - 1]  # address END token
-        encoded = encoded + self.vocab[END_TOKEN] * (CAP_LEN - cap_len)
+        encoded = encoded + [self.vocab[END_TOKEN]] * (CAP_MAX_LEN - cap_len)
         return encoded
 
     def get_image(self, index):
-        img_data = self.data.loc[index, :]
+        if self.images is not None:
+            return self.images[index]
+
+        img_data = self.data.iloc[index, :]
         img = Image.open('CUB_200_2011/images/' + img_data.img_path).convert('RGB')
         width, height = img.size
 
@@ -73,27 +77,6 @@ class CUBSubset(Dataset):
             imgs.append(self.normalize(re_img))
 
         return imgs
-
-    @staticmethod
-    def collate_fn(batch):
-        ret = {
-            'img64': [],
-            'img128': [],
-            'img256': [],
-            'caption': [],
-            'label': []
-        }
-        for img, cap, label in batch:
-            ret['img64'].append(img[0])
-            ret['img128'].append(img[1])
-            ret['img256'].append(img[2])
-            ret['caption'].append(cap)
-            ret['label'].append(label)
-
-        ret['img64'] = torch.stack(ret['img64'])
-        ret['img128'] = torch.stack(ret['img128'])
-        ret['img256'] = torch.stack(ret['img256'])
-        return ret
 
 
 class CUB(object):
@@ -155,16 +138,35 @@ class CUB(object):
 
         self.imsize = [BASE_SIZE * 2 ** i for i in range(BRANCH_NUM)]
 
-        self.loader = DataLoader(self, batch_size=BATCH, shuffle=True, drop_last=True, num_workers=1,
-                                 collate_fn=self.collate_fn)
-
         print('Loading class labels...')
         class_labels = pd.read_csv('CUB_200_2011/image_class_labels.txt', delim_whitespace=True, header=None,
                                    index_col=0, names=['class'])
         self.data = self.data.join(class_labels)
 
-        self.train = CUBSubset(self.data[self.data.train == 1], self.imsize, self.transforms, self.normalize,
-                               preload=False)
-        self.test = CUBSubset(self.data[self.data.train == 0], self.imsize, None, self.normalize, preload=True)
+        self.train = CUBSubset(self.data[self.data.train == 1], self.vocab, self.imsize, self.transforms,
+                               self.normalize, preload=False)
+        self.test = CUBSubset(self.data[self.data.train == 0], self.vocab, self.imsize, self.transforms,
+                              self.normalize, preload=True)
 
         print('Done.')
+
+    @staticmethod
+    def collate_fn(batch):
+        ret = {
+            'img64': [],
+            'img128': [],
+            'img256': [],
+            'caption': [],
+            'label': []
+        }
+        for img, cap, label in batch:
+            ret['img64'].append(img[0])
+            ret['img128'].append(img[1])
+            ret['img256'].append(img[2])
+            ret['caption'].append(cap)
+            ret['label'].append(label)
+
+        ret['img64'] = torch.stack(ret['img64'])
+        ret['img128'] = torch.stack(ret['img128'])
+        ret['img256'] = torch.stack(ret['img256'])
+        return ret

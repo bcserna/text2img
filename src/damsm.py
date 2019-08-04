@@ -3,12 +3,13 @@ import json
 import torch
 from torch import nn
 import numpy as np
-import time
 import os
-from tqdm import tqdm
+
+from torch.utils.data import DataLoader
+from tqdm import tqdm, trange
 
 from src.attention import func_attention
-from src.config import GAMMA_3, CUDA, BATCH, GAMMA_1, CAP_LEN, GAMMA_2, DEVICE
+from src.config import GAMMA_3, CUDA, BATCH, GAMMA_1, CAP_MAX_LEN, GAMMA_2, DEVICE
 from src.encoder import ImageEncoder, TextEncoder
 
 
@@ -33,43 +34,65 @@ def get_class_masks(cls_labels):
     return masks
 
 
-class DAMSM:
+class DAMSM(object):
     def __init__(self, vocab_size, device=DEVICE):
         self.img_enc = ImageEncoder().to(device)
         self.txt_enc = TextEncoder(vocab_size=vocab_size).to(device)
 
-    def train(self):
-        self.img_enc.train(), self.txt_enc.train()
+    def train(self, dataset, batch_size=BATCH, eval_every=20):
+        train_loader = DataLoader(dataset.train, batch_size=batch_size, shuffle=True, drop_last=False,
+                                  collate_fn=dataset.collate_fn)
+        test_loader = DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=False,
+                                 collate_fn=dataset.collate_fn)
 
         params = list(self.txt_enc.parameters())
         for v in self.img_enc.parameters():
             if v.requires_grad:
                 params.append(v)
+
         optim = torch.optim.Adam(params, lr=2e-4, betas=(0.5, 0.999))
-        word_loss1 = 0
-        word_loss2 = 0
-        sent_loss1 = 0
-        sent_loss2 = 0
 
-        start_time = time.time()
         img_cap_pair_labels = nn.Parameter(torch.LongTensor(range(BATCH)), requires_grad=False)
-        for step, batch in enumerate(tqdm(self.data.loader)):
-            self.img_enc.zero_grad()
-            self.txt_enc.zero_grad()
 
-            img_local, img_global = self.img_enc(batch['img256'])
-            word_emb, sent_emb = self.txt_enc(batch['caption'])
+        losses = {'train': [], 'test': []}
 
-            w1_loss, w2_loss, _ = self.words_loss(img_local, word_emb, batch['label'], img_cap_pair_labels)
-            s1_loss, s2_loss = self.sentence_loss(img_global, sent_emb, batch['label'], img_cap_pair_labels)
+        train_pbar = tqdm(train_loader, leave=True, desc='Training')
+        for step, batch in enumerate(train_pbar):
+            self.img_enc.train(), self.txt_enc.train()
+            self.img_enc.zero_grad(), self.txt_enc.zero_grad()
 
-            loss = w1_loss + w2_loss + s1_loss + s2_loss
+            loss, w1_loss, w2_loss, s1_loss, s2_loss = self.batch_loss(batch, img_cap_pair_labels)
+            train_pbar.set_description(
+                f'Training (total: {loss}  w1: {w1_loss}  w2: {w2_loss}  s1: {s1_loss}  s2: {s2_loss})')
 
             loss.backward(retain_graph=True)
             torch.nn.utils.clip_grad_norm(self.txt_enc.parameters(), 0.25)
             optim.step()
 
-            tqdm.write(f'\nw1: {w1_loss}    w2: {w2_loss}    s1: {s1_loss}    s2: {s2_loss}    total: {loss}')
+            if step % eval_every == 0:
+                self.img_enc.eval(), self.txt_enc.eval()
+                with torch.no_grad():
+                    for i, batch in enumerate(tqdm(train_loader, leave=True, desc='Evaluating training set')):
+                        loss = self.batch_loss(batch, img_cap_pair_labels)[0]
+                        losses['train'].append(loss)
+                        tqdm.write(f'Train loss after batch {step}: {loss}')
+
+                    for i, batch in enumerate(tqdm(test_loader, leave=True, desc='Evaluating test set')):
+                        loss = self.batch_loss(batch, img_cap_pair_labels)[0]
+                        losses['test'].append(loss)
+                        tqdm.write(f'Train loss after batch {step}: {loss}')
+
+        return losses
+
+    def batch_loss(self, batch, img_cap_pair_labels):
+        img_local, img_global = self.img_enc(batch['img256'])
+        word_emb, sent_emb = self.txt_enc(batch['caption'])
+
+        w1_loss, w2_loss, _ = self.words_loss(img_local, word_emb, batch['label'], img_cap_pair_labels)
+        s1_loss, s2_loss = self.sentence_loss(img_global, sent_emb, batch['label'], img_cap_pair_labels)
+
+        loss = w1_loss + w2_loss + s1_loss + s2_loss
+        return loss, w1_loss, w2_loss, s1_loss, s2_loss
 
     def save(self, name):
         save_dir = 'models'
@@ -129,11 +152,11 @@ class DAMSM:
             region_context, att_map = func_attention(words, img_features, GAMMA_1)
             att_maps.append(att_map[i].unsqueeze(0).contiguous())
             # BATCH * CAP_LEN x D_HIDDEN
-            words = words.transpose(1, 2).contiguous().view(BATCH * CAP_LEN, -1)
-            region_context = region_context.transpose(1, 2).contiguous().view(BATCH * CAP_LEN, -1)
+            words = words.transpose(1, 2).contiguous().view(BATCH * CAP_MAX_LEN, -1)
+            region_context = region_context.transpose(1, 2).contiguous().view(BATCH * CAP_MAX_LEN, -1)
 
             # Eq. (10)
-            sim = cos_sim(words, region_context).view(BATCH, CAP_LEN)
+            sim = cos_sim(words, region_context).view(BATCH, CAP_MAX_LEN)
             sim.mul_(GAMMA_2).exp_()
             sim = sim.sum(dim=1, keepdim=True)
             sim = torch.log(sim)
