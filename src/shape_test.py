@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.autograd import Variable
 
-from src.config import BATCH, D_Z, D_HIDDEN, D_COND, D_GF, D_WORD, CAP_LEN
+from src.config import BATCH, D_Z, D_HIDDEN, D_COND, D_GF, D_WORD, CAP_MAX_LEN
 from src.damsm import DAMSM
 from src.data import CUB
 from src.discriminator import Discriminator64, Discriminator128, Discriminator256
@@ -48,7 +48,7 @@ def test_run_generator_n():
     g2 = GeneratorN()
     h_code = torch.randn(BATCH, D_GF, 64, 64)
     c_code = torch.randn(BATCH, D_COND)
-    word_embs = torch.randn(BATCH, D_WORD, CAP_LEN)
+    word_embs = torch.randn(BATCH, D_WORD, CAP_MAX_LEN)
     mask = None
     out_code, att = g1(h_code, c_code, word_embs, mask)
     print(f'Generator1 output shape: {out_code.size()}    Attention shape: {att.size()}')
@@ -73,7 +73,7 @@ def test_run_generator():
     g = Generator()
     z_code = torch.randn(BATCH, D_Z)
     sent_emb = torch.randn(BATCH, D_HIDDEN)
-    word_embs = torch.randn(BATCH, D_WORD, CAP_LEN)
+    word_embs = torch.randn(BATCH, D_WORD, CAP_MAX_LEN)
     gen, att, mu, logvar = g(z_code, sent_emb, word_embs, None)
     print('Generated shape:')
     for k in gen:
