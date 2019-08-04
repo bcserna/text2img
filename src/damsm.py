@@ -69,7 +69,7 @@ class DAMSM(object):
             torch.nn.utils.clip_grad_norm(self.txt_enc.parameters(), 0.25)
             optim.step()
 
-            if step % eval_every == 0:
+            if step % eval_every == eval_every - 1:
                 self.img_enc.eval(), self.txt_enc.eval()
                 with torch.no_grad():
                     for i, batch in enumerate(tqdm(train_loader, leave=True, desc='Evaluating training set')):
