@@ -106,9 +106,11 @@ class CUB(object):
                     for word in c.split():
                         self.word_freq[word] = self.word_freq.get(word, 0) + 1
 
-        self.vocab = {word_freq[0]: i for i, word_freq in enumerate(self.word_freq.items())
-                      if word_freq[1] > min_word_freq
-                      }
+        self.vocab = {}
+        for word, freq in self.word_freq.items():
+            if freq > min_word_freq:
+                self.vocab[word] = len(self.vocab)
+
         self.vocab[END_TOKEN] = len(self.vocab)
         self.vocab[UNK_TOKEN] = len(self.vocab)
         print(f'Vocab size:{len(self.vocab)}')
