@@ -36,6 +36,7 @@ def get_class_masks(cls_labels):
 
 class DAMSM(object):
     def __init__(self, vocab_size, device=DEVICE):
+        self.device = device
         self.img_enc = ImageEncoder().to(device)
         self.txt_enc = TextEncoder(vocab_size=vocab_size).to(device)
 
@@ -52,7 +53,7 @@ class DAMSM(object):
 
         optim = torch.optim.Adam(params, lr=2e-4, betas=(0.5, 0.999))
 
-        img_cap_pair_labels = nn.Parameter(torch.LongTensor(range(BATCH)), requires_grad=False)
+        img_cap_pair_labels = nn.Parameter(torch.LongTensor(range(BATCH)), requires_grad=False).to(self.device)
 
         losses = {'train': [], 'test': []}
 
@@ -77,17 +78,17 @@ class DAMSM(object):
                     for i, batch in enumerate(tqdm(train_loader, leave=True, desc='Evaluating training set')):
                         loss = self.batch_loss(batch, img_cap_pair_labels)[0]
                         avg_train_loss += loss
-                        tqdm.write(f'Train loss after batch {step}: {loss}')
 
                     for i, batch in enumerate(tqdm(test_loader, leave=True, desc='Evaluating test set')):
                         loss = self.batch_loss(batch, img_cap_pair_labels)[0]
                         avg_test_loss += loss
-                        tqdm.write(f'Train loss after batch {step}: {loss}')
 
                     avg_train_loss /= len(train_loader)
                     avg_test_loss /= len(test_loader)
                     losses['train'].append(avg_train_loss)
                     losses['test'].append(avg_test_loss)
+                    tqdm.write(f'Train loss after batch {step}: {avg_train_loss}')
+                    tqdm.write(f'Test loss after batch {step}: {avg_test_loss}')
 
         return losses
 
