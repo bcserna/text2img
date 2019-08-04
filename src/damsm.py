@@ -72,15 +72,22 @@ class DAMSM(object):
             if step % eval_every == eval_every - 1:
                 self.img_enc.eval(), self.txt_enc.eval()
                 with torch.no_grad():
+                    avg_train_loss = 0
+                    avg_test_loss = 0
                     for i, batch in enumerate(tqdm(train_loader, leave=True, desc='Evaluating training set')):
                         loss = self.batch_loss(batch, img_cap_pair_labels)[0]
-                        losses['train'].append(loss)
+                        avg_train_loss += loss
                         tqdm.write(f'Train loss after batch {step}: {loss}')
 
                     for i, batch in enumerate(tqdm(test_loader, leave=True, desc='Evaluating test set')):
                         loss = self.batch_loss(batch, img_cap_pair_labels)[0]
-                        losses['test'].append(loss)
+                        avg_test_loss += loss
                         tqdm.write(f'Train loss after batch {step}: {loss}')
+
+                    avg_train_loss /= len(train_loader)
+                    avg_test_loss /= len(test_loader)
+                    losses['train'].append(avg_train_loss)
+                    losses['test'].append(avg_test_loss)
 
         return losses
 
