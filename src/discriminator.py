@@ -81,3 +81,16 @@ class Discriminator256(nn.Module):
         x = self.encoder64_2(x)  # -> BATCH x D_GF*8 x 4 x 4
         return x
 
+
+class Discriminator(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.d64 = Discriminator64()
+        self.d128 = Discriminator128()
+        self.d256 = Discriminator256()
+
+    def forward(self, x):
+        o64 = self.d64(x['img64'])
+        o128 = self.d128(x['img128'])
+        o256 = self.d256(x['img256'])
+        return [o64, o128, o256]
