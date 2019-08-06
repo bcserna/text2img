@@ -40,10 +40,10 @@ class DAMSM(object):
         self.img_enc = ImageEncoder().to(device)
         self.txt_enc = TextEncoder(vocab_size=vocab_size).to(device)
 
-    def train(self, dataset, batch_size=BATCH, eval_every=20, epoch=30):
-        train_loader = DataLoader(dataset.train, batch_size=batch_size, shuffle=True, drop_last=False,
+    def train(self, dataset, batch_size=BATCH, epoch=30):
+        train_loader = DataLoader(dataset.train, batch_size=batch_size, shuffle=True, drop_last=True,
                                   collate_fn=dataset.collate_fn)
-        test_loader = DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=False,
+        test_loader = DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=True,
                                  collate_fn=dataset.collate_fn)
 
         params = list(self.txt_enc.parameters())

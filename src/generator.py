@@ -76,20 +76,20 @@ class Generator(nn.Module):
         self.img2 = ImageGen()
 
     def forward(self, z_code, sent_emb, word_embs, mask):
-        generated = {}
-        attention = {}
+        generated = []
+        attention = []
 
         c_code, mu, logvar = self.cond_aug(sent_emb)
 
         h1 = self.f0(z_code, c_code)
-        generated[0] = self.img0(h1)
+        generated.append(self.img0(h1))
 
         h2, a1 = self.f1(h1, c_code, word_embs, mask)
-        generated[1] = self.img1(h2)
-        attention[1] = a1
+        generated.append(self.img1(h2))
+        attention.append(a1)
 
         h3, a2 = self.f2(h2, c_code, word_embs, mask)
-        generated[2] = self.img2(h3)
-        attention[2] = a2
+        generated.append(self.img2(h3))
+        attention.append(a2)
 
-        return generated, attention, mu, logvar
+        return generated
