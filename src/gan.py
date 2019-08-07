@@ -14,9 +14,21 @@ class AttnGAN(object):
         self.device = device
 
     def train(self, dataset, epoch, batch=BATCH):
-        train_loader = DataLoader(dataset.train, batch_size=batch, shuffle=True, drop_last=True,
-                                  collate_fn=dataset.collate_fn)
-        test_loader = DataLoader(dataset.test, batch_size=batch, shuffle=True, drop_last=True,
-                                 collate_fn=dataset.collate_fn)
+        loader_config = {
+            'batch_size': batch_size,
+            'shuffle': True,
+            'drop_last': True,
+            'collate_fn': dataset.collate_fn
+        }
+        train_loader = DataLoader(dataset.train, **loader_config)
+        test_loader = DataLoader(dataset.test, **loader_config)
 
+        for e in tqdm(range(epoch), desc='Epochs'):
+            self.gen.train(), self.disc.train()
 
+            train_pbar = tqdm(train_loader, desc='Training', leave=False)
+            for batch in train_pbar:
+                self.gen.zero_grad(), self.disc.zero_grad()
+
+    def batch_loss(self, batch):
+        pass

@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 import torchvision
 
-from src.config import D_HIDDEN, P_DROP, D_WORD, BATCH, D_COND, CUDA, IMG_WEIGHT_INIT_RANGE
+from src.config import D_HIDDEN, P_DROP, D_WORD, BATCH, D_COND, CUDA, IMG_WEIGHT_INIT_RANGE, DEVICE
 from src.util import conv1x1
 
 
@@ -20,14 +20,14 @@ class TextEncoder(nn.Module):
             dropout=P_DROP,
             bidirectional=True)
         # Initial cell and hidden state for each sequence
-        self.hidden0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True)
-        self.cell0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True)
+        self.hidden0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(DEVICE)
+        self.cell0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(DEVICE)
         # Different initial hidden state for different directions?
         self.init_hidden = self.hidden0.repeat(2, BATCH, 1)
         self.init_cell = self.cell0.repeat(2, BATCH, 1)
 
     def forward(self, x):
-        e = self.embed(torch.tensor(x, dtype=torch.int64))
+        e = self.embed(torch.tensor(x, dtype=torch.int64).to(DEVICE))
         e = self.emb_dropout(e)
         word_embs, hidden = self.rnn(e, (self.init_hidden, self.init_cell))
         word_embs = word_embs.transpose(1, 2)  # -> BATCH x D_HIDDEN x seq_len
@@ -53,7 +53,7 @@ class ImageEncoder(nn.Module):
 
     def forward(self, x):
         # --> fixed-size input: batch x 3 x 299 x 299
-        x = nn.functional.interpolate(input=x, size=(299, 299), mode='bilinear')
+        x = nn.functional.interpolate(input=x, size=(299, 299), mode='bilinear').to(DEVICE)
         # x = nn.Upsample(size=(299, 299), mode='bilinear')(x)
         # 299 x 299 x 3
         x = self.inception_model.Conv2d_1a_3x3(x)

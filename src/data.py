@@ -23,11 +23,11 @@ class CUBSubset(Dataset):
         self.normalize = normalize
         self.images = None
         if preload:
-            self.images = self.load_images()
+            self.images = list(self.load_images())
 
     def load_images(self):
         # self.images = [self.get_image(i) for i in tqdm(range(1, len(self)), desc='Preloading images')]
-        for i in tqdm(range(1, len(self)), desc='Preloading images'):
+        for i in tqdm(range(len(self)), desc='Preloading images'):
             yield self.get_image(i)
 
     def __getitem__(self, index):

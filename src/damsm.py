@@ -27,10 +27,7 @@ def get_class_masks(cls_labels):
         mask = cls_labels == l
         mask[i] = 0
         masks.append(mask)
-    masks = torch.ByteTensor(masks)
-    if CUDA:
-        masks = masks.cuda()
-
+    masks = torch.ByteTensor(masks).to(DEVICE)
     return masks
 
 
@@ -41,10 +38,14 @@ class DAMSM(object):
         self.txt_enc = TextEncoder(vocab_size=vocab_size).to(device)
 
     def train(self, dataset, batch_size=BATCH, epoch=30):
-        train_loader = DataLoader(dataset.train, batch_size=batch_size, shuffle=True, drop_last=True,
-                                  collate_fn=dataset.collate_fn)
-        test_loader = DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=True,
-                                 collate_fn=dataset.collate_fn)
+        loader_config = {
+            'batch_size': batch_size,
+            'shuffle': True,
+            'drop_last': True,
+            'collate_fn': dataset.collate_fn
+        }
+        train_loader = DataLoader(dataset.train, **loader_config)
+        test_loader = DataLoader(dataset.test, **loader_config)
 
         params = list(self.txt_enc.parameters())
         for v in self.img_enc.parameters():
@@ -57,7 +58,7 @@ class DAMSM(object):
 
         losses = {'train': [], 'test': []}
 
-        for _ in tqdm(range(epoch), desc='Epochs', leave=True):
+        for e in tqdm(range(epoch), desc='Epochs', leave=True):
             self.img_enc.train(), self.txt_enc.train()
             train_pbar = tqdm(train_loader, leave=False, desc='Training')
             for step, batch in enumerate(train_pbar):
@@ -65,7 +66,11 @@ class DAMSM(object):
 
                 loss, w1_loss, w2_loss, s1_loss, s2_loss = self.batch_loss(batch, img_cap_pair_labels)
                 train_pbar.set_description(
-                    f'Training (total: {loss}  w1: {w1_loss}  w2: {w2_loss}  s1: {s1_loss}  s2: {s2_loss})')
+                    f'Training (total: {round(loss, 3)}  '
+                    f'w1: {round(w1_loss, 3)}  '
+                    f'w2: {round(w2_loss, 3)}  '
+                    f's1: {round(s1_loss, 3)}  '
+                    f's2: {round(s2_loss, 3)})')
 
                 loss.backward(retain_graph=True)
                 torch.nn.utils.clip_grad_norm(self.txt_enc.parameters(), 0.25)
@@ -87,8 +92,8 @@ class DAMSM(object):
                 avg_test_loss /= len(test_loader)
                 losses['train'].append(avg_train_loss)
                 losses['test'].append(avg_test_loss)
-                tqdm.write(f'Train loss after batch {step}: {avg_train_loss}')
-                tqdm.write(f'Test loss after batch {step}: {avg_test_loss}')
+                tqdm.write(f'Train loss after epoch {e}: {avg_train_loss}')
+                tqdm.write(f'Test loss after epoch {e}: {avg_test_loss}')
 
         return losses
 
@@ -172,7 +177,7 @@ class DAMSM(object):
             similarities.append(sim)
 
         similarities = torch.cat(similarities, 1)  # -> BATCH x BATCH
-        masks = masks.view(BATCH, BATCH).contiguous()
+        masks = masks.view(BATCH, BATCH).contiguous().to(DEVICE)
 
         similarities = similarities * GAMMA_3
         similarities.data.masked_fill_(masks, -float('inf'))
