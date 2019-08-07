@@ -66,11 +66,11 @@ class DAMSM(object):
 
                 loss, w1_loss, w2_loss, s1_loss, s2_loss = self.batch_loss(batch, img_cap_pair_labels)
                 train_pbar.set_description(
-                    f'Training (total: {round(loss, 3)}  '
-                    f'w1: {round(w1_loss, 3)}  '
-                    f'w2: {round(w2_loss, 3)}  '
-                    f's1: {round(s1_loss, 3)}  '
-                    f's2: {round(s2_loss, 3)})')
+                    f'Training (total: {round(loss.item(), 3)}  '
+                    f'w1: {round(w1_loss.item(), 3):05.3f}  '
+                    f'w2: {round(w2_loss.item(), 3):05.3f}  '
+                    f's1: {round(s1_loss.item(), 3):05.3f}  '
+                    f's2: {round(s2_loss.item(), 3):05.3f})')
 
                 loss.backward(retain_graph=True)
                 torch.nn.utils.clip_grad_norm(self.txt_enc.parameters(), 0.25)
