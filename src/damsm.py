@@ -92,8 +92,11 @@ class DAMSM(object):
                 avg_test_loss /= len(test_loader)
                 losses['train'].append(avg_train_loss)
                 losses['test'].append(avg_test_loss)
-                tqdm.write(f'Train loss after epoch {e}: {avg_train_loss:05.3f}')
-                tqdm.write(f"Test loss after epoch {e}: {avg_test_loss:05.3f}\n{'_' * 30}")
+
+                sep = '_' * 10
+                tqdm.write(f'{sep}Epoch {e}{sep}')
+                tqdm.write(f'Train loss: {avg_train_loss:05.3f}')
+                tqdm.write(f'Test loss: {avg_test_loss:05.3f}')
 
         return losses
 
