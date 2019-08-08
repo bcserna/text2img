@@ -92,4 +92,4 @@ class Generator(nn.Module):
         generated.append(self.img2(h3))
         attention.append(a2)
 
-        return generated
+        return generated, attention, mu, logvar
