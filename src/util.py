@@ -2,6 +2,10 @@ from torch import nn
 import torch.nn.functional as F
 
 
+def roll_tensor(t, n, dim=0):
+    return torch.cat((t[-n:], t[:-n]), dim=dim)
+
+
 class Interpolate(nn.Module):
     def __init__(self, scale_factor, mode):
         super().__init__()
