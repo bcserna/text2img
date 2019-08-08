@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 
 from src.config import *
@@ -67,7 +68,7 @@ class Discriminator64(nn.Module):
     def __init__(self):
         super().__init__()
         self.encoder = downscale16_encoder_block()
-        self.logit = discriminator_logit_block()
+        self.logit = DiscriminatorLogitBlock()
 
     def forward(self, x):
         return self.encoder(x)
@@ -79,7 +80,7 @@ class Discriminator128(nn.Module):
         self.downscale_encoder_16 = downscale16_encoder_block()
         self.downscale_encoder_32 = downscale2_encoder_block(D_DF * 8, D_DF * 16)
         self.encoder32 = conv3x3_LReLU(D_DF * 16, D_DF * 8)
-        self.logit = discriminator_logit_block()
+        self.logit = DiscriminatorLogitBlock()
 
     def forward(self, x):
         x = self.downscale_encoder_16(x)  # -> BATCH x D_DF*8 x 8 x 8
@@ -96,7 +97,7 @@ class Discriminator256(nn.Module):
         self.downscale_encoder_64 = downscale2_encoder_block(D_DF * 16, D_DF * 32)
         self.encoder64 = conv3x3_LReLU(D_DF * 32, D_DF * 16)
         self.encoder64_2 = conv3x3_LReLU(D_DF * 16, D_DF * 8)
-        self.logit = discriminator_logit_block()
+        self.logit = DiscriminatorLogitBlock()
 
     def forward(self, x):
         x = self.downscale_encoder_16(x)  # -> BATCH x D_DF*8 x 16 x 16
