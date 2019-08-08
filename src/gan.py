@@ -38,9 +38,9 @@ class AttnGAN(object):
                                             betas=(0.5, 0.999))
                            for d in discriminators]
 
-        real_labels = nn.Parameter(torch.FloatTensor(batch).fill_(1)).to(self.device)
-        fake_labels = nn.Parameter(torch.FloatTensor(batch).fill_(0)).to(self.device)
-        match_labels = nn.Parameter(torch.LongTensor(range(batch))).to(self.device)
+        real_labels = nn.Parameter(torch.FloatTensor(batch).fill_(1), requires_grad=False).to(self.device)
+        fake_labels = nn.Parameter(torch.FloatTensor(batch).fill_(0), requires_grad=False).to(self.device)
+        match_labels = nn.Parameter(torch.LongTensor(range(batch)), requires_grad=False).to(self.device)
 
         noise = nn.Parameter(torch.FloatTensor(batch, D_Z), requires_grad=False).to(self.device)
 
