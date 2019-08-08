@@ -1,9 +1,12 @@
+import torch
+from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.config import *
 from src.discriminator import Discriminator
 from src.generator import Generator
+from src.util import roll_tensor
 
 
 class AttnGAN(object):
@@ -58,7 +61,7 @@ class AttnGAN(object):
                 # Discriminator loss
                 real_imgs = [batch['img64'], batch['img128'], batch['img256']]
                 real_features = self.disc(real_imgs)
-                fake_features = self.disc(fake_imgs)
+                fake_features = self.disc(generated)
 
                 real_logits = self.disc.get_logits(real_features, sent_embs)
                 fake_logits = self.disc.get_logits(fake_features, sent_embs)
@@ -87,7 +90,7 @@ class AttnGAN(object):
                 s_loss = (s1_loss + s2_loss) * LAMBDA
                 s_loss.backward()
 
-                kl_loss = KL_loss(mu, logvar)
+                kl_loss = self.KL_loss(mu, logvar)
                 kl_loss.backward()
 
                 gen_optimizer.step()
