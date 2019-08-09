@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 from src.config import *
-from src.util import conv3x3
+from src.util import conv3x3, count_params
 
 
 def downscale16_encoder_block():
@@ -70,6 +70,9 @@ class Discriminator64(nn.Module):
         self.encoder = downscale16_encoder_block()
         self.logit = DiscriminatorLogitBlock()
 
+        p_trainable, p_non_trainable = count_params(self)
+        print(f'Discriminator64 params: trainable {p_trainable} - non_trainable {p_non_trainable}')
+
     def forward(self, x):
         return self.encoder(x)
 
@@ -81,6 +84,9 @@ class Discriminator128(nn.Module):
         self.downscale_encoder_32 = downscale2_encoder_block(D_DF * 8, D_DF * 16)
         self.encoder32 = conv3x3_LReLU(D_DF * 16, D_DF * 8)
         self.logit = DiscriminatorLogitBlock()
+
+        p_trainable, p_non_trainable = count_params(self)
+        print(f'Discriminator128 params: trainable {p_trainable} - non_trainable {p_non_trainable}')
 
     def forward(self, x):
         x = self.downscale_encoder_16(x)  # -> BATCH x D_DF*8 x 8 x 8
@@ -98,6 +104,9 @@ class Discriminator256(nn.Module):
         self.encoder64 = conv3x3_LReLU(D_DF * 32, D_DF * 16)
         self.encoder64_2 = conv3x3_LReLU(D_DF * 16, D_DF * 8)
         self.logit = DiscriminatorLogitBlock()
+
+        p_trainable, p_non_trainable = count_params(self)
+        print(f'Discriminator256 params: trainable {p_trainable} - non_trainable {p_non_trainable}')
 
     def forward(self, x):
         x = self.downscale_encoder_16(x)  # -> BATCH x D_DF*8 x 16 x 16

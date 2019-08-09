@@ -3,7 +3,7 @@ from torch import nn
 
 from src.attention import Attention
 from src.encoder import CondAug
-from src.util import upsample_block, residual_block, conv3x3
+from src.util import upsample_block, residual_block, conv3x3, count_params
 
 from src.config import *
 
@@ -21,6 +21,9 @@ class Generator0(nn.Module):
         self.upsample_steps = nn.Sequential(
             *[upsample_block(self.d_gf // (2 ** i), self.d_gf // (2 ** (i + 1))) for i in range(4)])
 
+        p_trainable, p_non_trainable = count_params(self)
+        print(f'Generator0 params: trainable {p_trainable} - non_trainable {p_non_trainable}')
+
     def forward(self, z_code, c_code):
         x = torch.cat((c_code, z_code), 1)
         x = self.fc(x)
@@ -36,6 +39,9 @@ class GeneratorN(nn.Module):
         self.residuals = nn.Sequential(*[residual_block(D_GF * 2) for _ in range(RESIDUALS)])
         self.attn = Attention(D_GF, D_HIDDEN)
         self.upsample = upsample_block(D_GF * 2, D_GF)
+
+        p_trainable, p_non_trainable = count_params(self)
+        print(f'GeneratorN params: trainable {p_trainable} - non_trainable {p_non_trainable}')
 
     def forward(self, h_code, c_code, word_embs, mask):
         """
@@ -59,6 +65,9 @@ class ImageGen(nn.Module):
             conv3x3(D_GF, 3),
             nn.Tanh()
         )
+
+        p_trainable, p_non_trainable = count_params(self)
+        print(f'Image output params: trainable {p_trainable} - non_trainable {p_non_trainable}')
 
     def forward(self, h_code):
         return self.img(h_code)
