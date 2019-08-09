@@ -5,7 +5,7 @@ from src.attention import Attention
 from src.encoder import CondAug
 from src.util import upsample_block, residual_block, conv3x3
 
-from src.config import D_Z, D_COND, D_GF, RESIDUALS, D_HIDDEN, D_WORD
+from src.config import *
 
 
 class Generator0(nn.Module):
@@ -34,7 +34,7 @@ class GeneratorN(nn.Module):
     def __init__(self):
         super().__init__()
         self.residuals = nn.Sequential(*[residual_block(D_GF * 2) for _ in range(RESIDUALS)])
-        self.attn = Attention(D_GF, D_WORD)
+        self.attn = Attention(D_GF, D_HIDDEN)
         self.upsample = upsample_block(D_GF * 2, D_GF)
 
     def forward(self, h_code, c_code, word_embs, mask):
