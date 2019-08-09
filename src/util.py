@@ -7,6 +7,17 @@ def roll_tensor(t, n, dim=0):
     return torch.cat((t[-n:], t[:-n]), dim=dim)
 
 
+def count_params(module):
+    trainable = 0
+    non_trainable = 0
+    for p in module.parameters():
+        if p.requires_grad:
+            trainable += p.numel()
+        else:
+            non_trainable += p.numel()
+    return trainable, non_trainable
+
+
 class Interpolate(nn.Module):
     def __init__(self, scale_factor, mode):
         super().__init__()
@@ -28,7 +39,6 @@ def conv3x3(in_channels, out_channels):
 def upsample_block(in_planes, out_planes):
     return nn.Sequential(
         Interpolate(scale_factor=2, mode='nearest'),
-        # nn.Upsample(scale_factor=2, mode='nearest'),
         conv3x3(in_planes, out_planes * 2),
         nn.BatchNorm2d(out_planes * 2),
         nn.modules.activation.GLU(dim=1)
