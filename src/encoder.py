@@ -111,9 +111,10 @@ class ImageEncoder(nn.Module):
 
 
 class CondAug(nn.Module):
-    def __init__(self):
+    def __init__(self, device=DEVICE):
         super().__init__()
-        self.fc = nn.Linear(D_HIDDEN, D_COND * 4, bias=True)
+        self.device = device
+        self.fc = nn.Linear(D_HIDDEN, D_COND * 4, bias=True).to(device)
 
     def encode(self, text_emb):
         x = F.glu(self.fc(text_emb))
@@ -122,11 +123,8 @@ class CondAug(nn.Module):
         return mu, logvar
 
     def reparam(self, mu, logvar):
-        std = logvar.mul(0.5).exp_()
-        if CUDA:
-            eps = torch.cuda.FloatTensor(std.size()).normal_()
-        else:
-            eps = torch.FloatTensor(std.size()).normal_()
+        std = logvar.mul(0.5).exp_().to(self.device)
+        eps = torch.FloatTensor(std.size()).normal_().to(self.device)
         eps = nn.Parameter(eps)
         return eps.mul(std).add_(mu)
 
