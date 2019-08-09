@@ -48,6 +48,7 @@ class CUBSubset(Dataset):
         encoded = encoded[:CAP_MAX_LEN - 1]  # address END token
         cap_len = len(encoded)
         encoded = encoded + [self.vocab[END_TOKEN]] * (CAP_MAX_LEN - cap_len)
+        encoded = np.asarray(encoded)
         return encoded
 
     def get_image(self, index):
@@ -115,7 +116,7 @@ class CUB(object):
         self.vocab[UNK_TOKEN] = len(self.vocab)
         print(f'Vocab size:{len(self.vocab)}')
 
-        print('Setting train/test split...')
+        print('Setting train/test split ...')
         with open('CUB_200_2011/test/filenames.pickle', 'rb') as f:
             test = pickle.load(f)
 
@@ -140,7 +141,7 @@ class CUB(object):
 
         self.imsize = [BASE_SIZE * 2 ** i for i in range(BRANCH_NUM)]
 
-        print('Loading class labels...')
+        print('Loading class labels ...')
         class_labels = pd.read_csv('CUB_200_2011/image_class_labels.txt', delim_whitespace=True, header=None,
                                    index_col=0, names=['class'])
         self.data = self.data.join(class_labels)
