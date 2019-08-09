@@ -43,7 +43,6 @@ class AttnGAN(object):
         match_labels = nn.Parameter(torch.LongTensor(range(batch)), requires_grad=False).to(self.device)
 
         noise = nn.Parameter(torch.FloatTensor(batch, D_Z), requires_grad=False).to(self.device)
-
         for e in tqdm(range(epoch), desc='Epochs'):
             self.gen.train(), self.disc.train()
 
@@ -52,12 +51,10 @@ class AttnGAN(object):
                 self.gen.zero_grad(), self.disc.zero_grad()
                 word_embs, sent_embs = self.damsm.txt_enc(batch['caption'])
                 word_embs, sent_embs = word_embs.detach(), sent_embs.detach()
-                attn_mask = batch['caption'] == dataset.vocab[END_TOKEN]
-
+                attn_mask = torch.tensor(batch['caption']).to(self.device) == dataset.vocab[END_TOKEN]
                 # Generate images
                 noise.data.normal_(0, 1)
                 generated, att, mu, logvar = self.gen(noise, sent_embs, word_embs, attn_mask)
-
                 # Discriminator loss
                 real_imgs = [batch['img64'], batch['img128'], batch['img256']]
                 real_features = self.disc(real_imgs)
@@ -77,7 +74,7 @@ class AttnGAN(object):
                                zip(real_errors, fake_errors, mismatched_errors)]
 
                 for error, optimizer in zip(disc_errors, disc_optimizers):
-                    error.backward()
+                    error.backward(retain_graph=True)
                     optimizer.step()
 
                 # Generator loss
@@ -88,7 +85,7 @@ class AttnGAN(object):
 
                 s1_loss, s2_loss = self.damsm.sentence_loss(global_features, sent_embs, batch['label'], match_labels)
                 s_loss = (s1_loss + s2_loss) * LAMBDA
-                s_loss.backward()
+                s_loss.backward(retain_graph=True)
 
                 kl_loss = self.KL_loss(mu, logvar)
                 kl_loss.backward()
