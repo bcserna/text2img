@@ -16,9 +16,9 @@ class AttnGAN(object):
         self.damsm = damsm
         self.device = device
 
-    def train(self, dataset, epoch, batch=BATCH):
+    def train(self, dataset, epoch, batch_size=GAN_BATCH):
         loader_config = {
-            'batch_size': batch,
+            'batch_size': batch_size,
             'shuffle': True,
             'drop_last': True,
             'collate_fn': dataset.collate_fn
@@ -26,7 +26,7 @@ class AttnGAN(object):
         train_loader = DataLoader(dataset.train, **loader_config)
         # test_loader = DataLoader(dataset.test, **loader_config)
 
-        losses = {}
+        losses = {'g': [], 'd': []}
 
         gen_optimizer = torch.optim.Adam(self.gen.parameters(),
                                          lr=GENERATOR_LR,
@@ -38,19 +38,22 @@ class AttnGAN(object):
                                             betas=(0.5, 0.999))
                            for d in discriminators]
 
-        real_labels = nn.Parameter(torch.FloatTensor(batch).fill_(1), requires_grad=False).to(self.device)
-        fake_labels = nn.Parameter(torch.FloatTensor(batch).fill_(0), requires_grad=False).to(self.device)
-        match_labels = nn.Parameter(torch.LongTensor(range(batch)), requires_grad=False).to(self.device)
+        real_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(1), requires_grad=False).to(self.device)
+        fake_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(0), requires_grad=False).to(self.device)
+        match_labels = nn.Parameter(torch.LongTensor(range(batch_size)), requires_grad=False).to(self.device)
 
-        noise = nn.Parameter(torch.FloatTensor(batch, D_Z), requires_grad=False).to(self.device)
+        noise = nn.Parameter(torch.FloatTensor(batch_size, D_Z), requires_grad=False).to(self.device)
         for e in tqdm(range(epoch), desc='Epochs'):
             self.gen.train(), self.disc.train()
+            g_loss = 0
+            d_loss = [0, 0, 0]
 
             train_pbar = tqdm(train_loader, desc='Training', leave=False)
             for batch in train_pbar:
                 self.gen.zero_grad(), self.disc.zero_grad()
-                word_embs, sent_embs = self.damsm.txt_enc(batch['caption'])
-                word_embs, sent_embs = word_embs.detach(), sent_embs.detach()
+                with torch.no_grad():
+                    word_embs, sent_embs = self.damsm.txt_enc(batch['caption'])
+                # word_embs, sent_embs = word_embs.detach(), sent_embs.detach()
                 attn_mask = torch.tensor(batch['caption']).to(self.device) == dataset.vocab[END_TOKEN]
                 # Generate images
                 noise.data.normal_(0, 1)
@@ -73,9 +76,10 @@ class AttnGAN(object):
                 disc_errors = [real + fake + mismatched for real, fake, mismatched in
                                zip(real_errors, fake_errors, mismatched_errors)]
 
-                for error, optimizer in zip(disc_errors, disc_optimizers):
+                for error, optimizer, disc in zip(disc_errors, disc_optimizers, range(3)):
                     error.backward(retain_graph=True)
                     optimizer.step()
+                    d_loss[disc] += error.item() / batch_size
 
                 # Generator loss
                 local_features, global_features = self.damsm.img_enc(generated[-1])
@@ -96,9 +100,27 @@ class AttnGAN(object):
                 for error in fake_errors:
                     g_total += error
 
-                train_pbar.set_description(f'Training (G_total: {g_total:05.3f})')
-                # TODO log more metrics
-                # TODO averaging generator params?
+                avg_g_loss = g_total.item() / batch_size
+                g_loss += avg_g_loss
+
+                train_pbar.set_description(f'Training (G: {avg_g_loss:05.4f}'
+                                           f'  D64: {disc_errors[0] / batch_size:05.4f}'
+                                           f'  D128: {disc_errors[1] / batch_size:05.4f}'
+                                           f'  D256: {disc_errors[2] / batch_size:05.4f})')
+
+            g_loss /= len(train_loader)
+            for i, _ in enumerate(d_loss):
+                d_loss[i] /= len(train_loader)
+
+            losses['g'].append(g_loss)
+            losses['d'].append(d_loss)
+
+            sep = '_'
+            tqdm.write(f'{sep}Epoch {e}{sep}')
+            tqdm.write(f'Avg generator loss: {g_loss:05.4f}')
+            tqdm.write(f'Avg discriminator loss: 64 {d_loss[0]:05.4f}  128 {d_loss[1]:05.4f}  256 {d_loss[1]:05.4f}')
+
+        return losses
 
     @staticmethod
     def KL_loss(mu, logvar):
