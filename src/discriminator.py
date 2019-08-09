@@ -8,18 +8,18 @@ from src.util import conv3x3
 def downscale16_encoder_block():
     return nn.Sequential(
         # in: BATCH x 3 x ih x iw
-        # -> BATCH x D_GF x ih/2 x iw/2
+        # -> BATCH x D_DF x ih/2 x iw/2
         nn.Conv2d(in_channels=3, out_channels=D_DF, kernel_size=4, stride=2, padding=1, bias=False),
         nn.LeakyReLU(0.2, inplace=True),
-        # -> BATCH x D_GF*2 x ih/4 x iw/4
+        # -> BATCH x D_DF*2 x ih/4 x iw/4
         nn.Conv2d(in_channels=D_DF, out_channels=D_DF * 2, kernel_size=4, stride=2, padding=1, bias=False),
-        nn.BatchNorm2d(D_GF * 2),
+        nn.BatchNorm2d(D_DF * 2),
         nn.LeakyReLU(0.2, inplace=True),
-        # -> BATCH x D_GF*4 x ih/8 x iw/8
+        # -> BATCH x D_DF*4 x ih/8 x iw/8
         nn.Conv2d(in_channels=D_DF * 2, out_channels=D_DF * 4, kernel_size=4, stride=2, padding=1, bias=False),
-        nn.BatchNorm2d(D_GF * 4),
+        nn.BatchNorm2d(D_DF * 4),
         nn.LeakyReLU(0.2, inplace=True),
-        # -> BATCH x D_GF*8 x ih/16 x iw/16
+        # -> BATCH x D_DF*8 x ih/16 x iw/16
         nn.Conv2d(in_channels=D_DF * 4, out_channels=D_DF * 8, kernel_size=4, stride=2, padding=1, bias=False),
         nn.BatchNorm2d(D_DF * 8),
         nn.LeakyReLU(0.2, inplace=True)
@@ -109,16 +109,17 @@ class Discriminator256(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self):
+    def __init__(self, device=DEVICE):
         super().__init__()
-        self.d64 = Discriminator64()
-        self.d128 = Discriminator128()
-        self.d256 = Discriminator256()
+        self.d64 = Discriminator64().to(device)
+        self.d128 = Discriminator128().to(device)
+        self.d256 = Discriminator256().to(device)
+        self.device = device
 
     def forward(self, x):
-        o64 = self.d64(x[0])
-        o128 = self.d128(x[1])
-        o256 = self.d256(x[2])
+        o64 = self.d64(x[0].to(self.device))
+        o128 = self.d128(x[1].to(self.device))
+        o256 = self.d256(x[2].to(self.device))
         return o64, o128, o256
 
     def get_logits(self, x, condition):
