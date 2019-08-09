@@ -37,7 +37,7 @@ class DAMSM(object):
         self.img_enc = ImageEncoder().to(device)
         self.txt_enc = TextEncoder(vocab_size=vocab_size).to(device)
 
-    def train(self, dataset, batch_size=BATCH, epoch=30):
+    def train(self, dataset, epoch, batch_size=BATCH, patience=20):
         loader_config = {
             'batch_size': batch_size,
             'shuffle': True,
@@ -54,49 +54,66 @@ class DAMSM(object):
 
         optim = torch.optim.Adam(params, lr=2e-4, betas=(0.5, 0.999))
 
-        img_cap_pair_labels = nn.Parameter(torch.LongTensor(range(BATCH)), requires_grad=False).to(self.device)
+        img_cap_pair_labels = nn.Parameter(torch.LongTensor(range(batch_size)), requires_grad=False).to(self.device)
 
         losses = {'train': [], 'test': []}
-
+        patience_step = 0
+        min_test_loss = float('Inf')
+        min_test_loss_epoch = 0
         for e in tqdm(range(epoch), desc='Epochs', leave=True):
             self.img_enc.train(), self.txt_enc.train()
+            avg_train_loss = 0
+            avg_test_loss = 0
+
             train_pbar = tqdm(train_loader, leave=False, desc='Training')
             for step, batch in enumerate(train_pbar):
                 self.img_enc.zero_grad(), self.txt_enc.zero_grad()
 
                 loss, w1_loss, w2_loss, s1_loss, s2_loss = self.batch_loss(batch, img_cap_pair_labels)
                 train_pbar.set_description(
-                    f'Training (total: {round(loss.item(), 3)}  '
-                    f'w1: {w1_loss.item():05.3f}  '
-                    f'w2: {w2_loss.item():05.3f}  '
-                    f's1: {s1_loss.item():05.3f}  '
-                    f's2: {s2_loss.item():05.3f})')
+                    f'Training (total: {loss.item() / batch_size:05.4f}  '
+                    f'w1: {w1_loss / batch_size:05.4f}  '
+                    f'w2: {w2_loss / batch_size:05.4f}  '
+                    f's1: {s1_loss / batch_size:05.4f}  '
+                    f's2: {s2_loss / batch_size:05.4f})')
 
+                avg_train_loss += loss.item()
                 loss.backward(retain_graph=True)
-                torch.nn.utils.clip_grad_norm(self.txt_enc.parameters(), 0.25)
+                torch.nn.utils.clip_grad_norm_(self.txt_enc.parameters(), 0.25)
                 optim.step()
 
             self.img_enc.eval(), self.txt_enc.eval()
             with torch.no_grad():
-                avg_train_loss = 0
-                avg_test_loss = 0
-                for i, batch in enumerate(tqdm(train_loader, leave=True, desc='Evaluating training set')):
-                    loss = self.batch_loss(batch, img_cap_pair_labels)[0]
-                    avg_train_loss += loss
+                # for i, b in enumerate(tqdm(train_loader, leave=True, desc='Evaluating training set')):
+                #     loss = self.batch_loss(b, img_cap_pair_labels)[0]
+                #     avg_train_loss += loss
 
-                for i, batch in enumerate(tqdm(test_loader, leave=True, desc='Evaluating test set')):
-                    loss = self.batch_loss(batch, img_cap_pair_labels)[0]
+                for i, b in enumerate(tqdm(test_loader, leave=True, desc='Evaluating test set')):
+                    loss = self.batch_loss(b, img_cap_pair_labels)[0]
                     avg_test_loss += loss
 
-                avg_train_loss /= len(train_loader)
-                avg_test_loss /= len(test_loader)
+                avg_train_loss /= (len(train_loader) * batch_size)
+                avg_test_loss /= (len(test_loader) * batch_size)
                 losses['train'].append(avg_train_loss)
                 losses['test'].append(avg_test_loss)
 
                 sep = '_' * 10
                 tqdm.write(f'{sep}Epoch {e}{sep}')
-                tqdm.write(f'Train loss: {avg_train_loss:05.3f}')
-                tqdm.write(f'Test loss: {avg_test_loss:05.3f}')
+                tqdm.write(f'Avg train loss: {avg_train_loss:05.4f}')
+                tqdm.write(f'Avg test loss: {avg_test_loss:05.4f}')
+
+            if avg_test_loss < min_test_loss:
+                self.save(f'epoch_{e}')
+                min_test_loss = avg_test_loss
+                patience_step = 0
+            else:
+                patience_step += 1
+
+            if patience_step == patience:
+                tqdm.write(f'Early stopping at epoch {e}')
+                tqdm.write(f'Loading model at epoch {min_test_loss_epoch}')
+                self.load_(f'epoch_{min_test_loss_epoch}')
+                return losses
 
         return losses
 
@@ -128,6 +145,10 @@ class DAMSM(object):
         damsm.txt_enc.load_state_dict(torch.load(f'{load_dir}/{name}_text_enc.pt'))
         damsm.img_enc.load_state_dict(torch.load(f'{load_dir}/{name}_img_enc.pt'))
         return damsm
+
+    def load_(self, name):
+        self.txt_enc.load_state_dict(torch.load(f'{load_dir}/{name}_text_enc.pt'))
+        self.img_enc.load_state_dict(torch.load(f'{load_dir}/{name}_img_enc.pt'))
 
     @staticmethod
     def sentence_loss(img_code, sent_code, cls_labels, img_cap_pair_label, eps=1e-8):
