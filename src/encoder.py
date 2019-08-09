@@ -2,9 +2,10 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import torchvision
+import warnings
 
 from src.config import D_HIDDEN, P_DROP, D_WORD, BATCH, D_COND, CUDA, IMG_WEIGHT_INIT_RANGE, DEVICE
-from src.util import conv1x1
+from src.util import conv1x1, count_params
 
 
 class TextEncoder(nn.Module):
@@ -13,18 +14,23 @@ class TextEncoder(nn.Module):
         self.vocab_size = vocab_size
         self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=D_WORD)
         self.emb_dropout = nn.Dropout(P_DROP)
-        self.rnn = nn.LSTM(
-            input_size=D_WORD,
-            hidden_size=D_HIDDEN // 2,  # bidirectional
-            batch_first=True,
-            dropout=P_DROP,
-            bidirectional=True)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            self.rnn = nn.LSTM(
+                input_size=D_WORD,
+                hidden_size=D_HIDDEN // 2,  # bidirectional
+                batch_first=True,
+                dropout=P_DROP,
+                bidirectional=True)
         # Initial cell and hidden state for each sequence
         self.hidden0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(DEVICE)
         self.cell0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(DEVICE)
         # Different initial hidden state for different directions?
         self.init_hidden = self.hidden0.repeat(2, BATCH, 1)
         self.init_cell = self.cell0.repeat(2, BATCH, 1)
+
+        p_trainable, p_non_trainable = count_params(self)
+        print(f'Text encoder params: trainable {p_trainable} - non_trainable {p_non_trainable}')
 
     def forward(self, x):
         e = self.embed(torch.tensor(x, dtype=torch.int64).to(DEVICE))
@@ -51,9 +57,12 @@ class ImageEncoder(nn.Module):
         self.local_proj.weight.data.uniform_(-IMG_WEIGHT_INIT_RANGE, IMG_WEIGHT_INIT_RANGE)
         self.global_proj.weight.data.uniform_(-IMG_WEIGHT_INIT_RANGE, IMG_WEIGHT_INIT_RANGE)
 
+        p_trainable, p_non_trainable = count_params(self)
+        print(f'Image encoder params: trainable {p_trainable} - non_trainable {p_non_trainable}')
+
     def forward(self, x):
         # --> fixed-size input: batch x 3 x 299 x 299
-        x = nn.functional.interpolate(input=x, size=(299, 299), mode='bilinear').to(DEVICE)
+        x = nn.functional.interpolate(input=x, size=(299, 299), mode='bilinear', align_corners=False).to(DEVICE)
         # x = nn.Upsample(size=(299, 299), mode='bilinear')(x)
         # 299 x 299 x 3
         x = self.inception_model.Conv2d_1a_3x3(x)
