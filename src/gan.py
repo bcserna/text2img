@@ -14,6 +14,7 @@ class AttnGAN:
         self.gen = Generator().to(device)
         self.disc = Discriminator().to(device)
         self.damsm = damsm
+        self.damsm.txt_enc.eval(), self.damsm.img_enc.eval()
         self.device = device
 
     def train(self, dataset, epoch, batch_size=GAN_BATCH):
