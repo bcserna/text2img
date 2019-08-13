@@ -27,7 +27,7 @@ def get_class_masks(cls_labels):
         mask = cls_labels == l
         mask[i] = 0
         masks.append(mask)
-    masks = torch.ByteTensor(masks).to(DEVICE)
+    masks = torch.BoolTensor(masks).to(DEVICE)
     return masks
 
 
@@ -110,8 +110,9 @@ class DAMSM:
             tqdm.write(f'Avg test loss: {avg_test_loss:05.4f} {new_best}')
 
             if patience_step == patience:
-                tqdm.write(f'Early stopping at epoch {e} with test loss {min_test_loss}')
-                tqdm.write(f'Loading model at epoch {min_test_loss_epoch}')
+                tqdm.write(f'Early stopping at epoch {e}')
+                tqdm.write(
+                    f'Loading model at epoch {min_test_loss_epoch} with best test avg loss {min_test_loss:05.4f}')
                 self.load_(f'epoch_{min_test_loss_epoch}')
                 return losses
 
