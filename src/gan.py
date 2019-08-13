@@ -9,7 +9,7 @@ from src.generator import Generator
 from src.util import roll_tensor
 
 
-class AttnGAN(object):
+class AttnGAN:
     def __init__(self, damsm, device=DEVICE):
         self.gen = Generator().to(device)
         self.disc = Discriminator().to(device)

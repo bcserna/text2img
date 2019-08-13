@@ -31,7 +31,7 @@ def get_class_masks(cls_labels):
     return masks
 
 
-class DAMSM(object):
+class DAMSM:
     def __init__(self, vocab_size, device=DEVICE):
         self.device = device
         self.img_enc = ImageEncoder().to(device)
@@ -84,10 +84,6 @@ class DAMSM(object):
 
             self.img_enc.eval(), self.txt_enc.eval()
             with torch.no_grad():
-                # for i, b in enumerate(tqdm(train_loader, leave=True, desc='Evaluating training set')):
-                #     loss = self.batch_loss(b, img_cap_pair_labels)[0]
-                #     avg_train_loss += loss
-
                 for i, b in enumerate(tqdm(test_loader, leave=True, desc='Evaluating test set')):
                     loss = self.batch_loss(b, img_cap_pair_labels)[0]
                     avg_test_loss += loss
@@ -97,20 +93,24 @@ class DAMSM(object):
                 losses['train'].append(avg_train_loss)
                 losses['test'].append(avg_test_loss)
 
-                sep = '_' * 10
-                tqdm.write(f'{sep}Epoch {e}{sep}')
-                tqdm.write(f'Avg train loss: {avg_train_loss:05.4f}')
-                tqdm.write(f'Avg test loss: {avg_test_loss:05.4f}')
-
+            new_best = ''
             if avg_test_loss < min_test_loss:
+                new_best = '!'
                 self.save(f'epoch_{e}')
                 min_test_loss = avg_test_loss
+                min_test_loss_epoch = e
                 patience_step = 0
             else:
+                new_best = ''
                 patience_step += 1
 
+            sep = '_' * 10
+            tqdm.write(f'{sep}Epoch {e}{sep}')
+            tqdm.write(f'Avg train loss: {avg_train_loss:05.4f}')
+            tqdm.write(f'Avg test loss: {avg_test_loss:05.4f} {new_best}')
+
             if patience_step == patience:
-                tqdm.write(f'Early stopping at epoch {e}')
+                tqdm.write(f'Early stopping at epoch {e} with test loss {min_test_loss}')
                 tqdm.write(f'Loading model at epoch {min_test_loss_epoch}')
                 self.load_(f'epoch_{min_test_loss_epoch}')
                 return losses
@@ -144,11 +144,14 @@ class DAMSM(object):
         damsm = DAMSM(config['vocab_size'])
         damsm.txt_enc.load_state_dict(torch.load(f'{load_dir}/{name}_text_enc.pt'))
         damsm.img_enc.load_state_dict(torch.load(f'{load_dir}/{name}_img_enc.pt'))
+        damsm.txt_enc.eval(), damsm.img_enc.eval()
         return damsm
 
     def load_(self, name):
+        load_dir = 'models'
         self.txt_enc.load_state_dict(torch.load(f'{load_dir}/{name}_text_enc.pt'))
         self.img_enc.load_state_dict(torch.load(f'{load_dir}/{name}_img_enc.pt'))
+        self.txt_enc.eval(), self.img_enc.eval()
 
     @staticmethod
     def sentence_loss(img_code, sent_code, cls_labels, img_cap_pair_label, eps=1e-8):

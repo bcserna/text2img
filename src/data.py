@@ -80,7 +80,7 @@ class CUBSubset(Dataset):
         return imgs
 
 
-class CUB(object):
+class CUB:
     def __init__(self, min_word_freq=MIN_WORD_FREQ):
         print('Loading image paths ...')
         self.data = pd.read_csv('CUB_200_2011/images.txt', delim_whitespace=True, header=None, index_col=0,

@@ -1,6 +1,6 @@
 D_GF = 32
 D_DF = 64
-D_WORD = 200
+D_WORD = 256
 D_HIDDEN = 128
 D_Z = 100
 D_COND = 100
