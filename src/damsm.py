@@ -143,8 +143,7 @@ class DAMSM:
         with open(f'{load_dir}/{name}_config.json', 'r') as f:
             config = json.load(f)
         damsm = DAMSM(config['vocab_size'])
-        damsm.txt_enc.load_state_dict(torch.load(f'{load_dir}/{name}_text_enc.pt'))
-        damsm.img_enc.load_state_dict(torch.load(f'{load_dir}/{name}_img_enc.pt'))
+        damsm.load_(name)
         damsm.txt_enc.eval(), damsm.img_enc.eval()
         return damsm
 
@@ -186,7 +185,7 @@ class DAMSM:
         att_maps = []
         similarities = []
 
-        batch_size = img.features.size(0)
+        batch_size = img_features.size(0)
 
         for i in range(batch_size):
             words = word_embs[i].unsqueeze(0).contiguous()  # -> 1 x D_HIDDEN x CAP_LEN
