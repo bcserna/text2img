@@ -186,18 +186,20 @@ class DAMSM:
         att_maps = []
         similarities = []
 
-        for i in range(BATCH):
+        batch_size = img.features.size(0)
+
+        for i in range(batch_size):
             words = word_embs[i].unsqueeze(0).contiguous()  # -> 1 x D_HIDDEN x CAP_LEN
-            words = words.repeat(BATCH, 1, 1)  # -> BATCH x D_HIDDEN x CAP_LEN
+            words = words.repeat(batch_size, 1, 1)  # -> BATCH x D_HIDDEN x CAP_LEN
             # region_context: word representation by image regions
             region_context, att_map = func_attention(words, img_features, GAMMA_1)
             att_maps.append(att_map[i].unsqueeze(0).contiguous())
             # BATCH * CAP_LEN x D_HIDDEN
-            words = words.transpose(1, 2).contiguous().view(BATCH * CAP_MAX_LEN, -1)
-            region_context = region_context.transpose(1, 2).contiguous().view(BATCH * CAP_MAX_LEN, -1)
+            words = words.transpose(1, 2).contiguous().view(batch_size * CAP_MAX_LEN, -1)
+            region_context = region_context.transpose(1, 2).contiguous().view(batch_size * CAP_MAX_LEN, -1)
 
             # Eq. (10)
-            sim = cos_sim(words, region_context).view(BATCH, CAP_MAX_LEN)
+            sim = cos_sim(words, region_context).view(batch_size, CAP_MAX_LEN)
             sim.mul_(GAMMA_2).exp_()
             sim = sim.sum(dim=1, keepdim=True)
             sim = torch.log(sim)
@@ -205,7 +207,7 @@ class DAMSM:
             similarities.append(sim)
 
         similarities = torch.cat(similarities, 1)  # -> BATCH x BATCH
-        masks = masks.view(BATCH, BATCH).contiguous().to(DEVICE)
+        masks = masks.view(batch_size, batch_size).contiguous().to(DEVICE)
 
         similarities = similarities * GAMMA_3
         similarities.data.masked_fill_(masks, -float('inf'))

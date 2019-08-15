@@ -26,19 +26,21 @@ class TextEncoder(nn.Module):
         self.hidden0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(DEVICE)
         self.cell0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(DEVICE)
         # Different initial hidden state for different directions?
-        self.init_hidden = self.hidden0.repeat(2, BATCH, 1)
-        self.init_cell = self.cell0.repeat(2, BATCH, 1)
 
         p_trainable, p_non_trainable = count_params(self)
         print(f'Text encoder params: trainable {p_trainable} - non_trainable {p_non_trainable}')
 
     def forward(self, x):
+        batch_size = len(x)
+        init_hidden = self.hidden0.repeat(2, batch_size, 1)
+        init_cell = self.cell0.repeat(2, batch_size, 1)
+
         e = self.embed(torch.tensor(x, dtype=torch.int64).to(DEVICE))
         e = self.emb_dropout(e)
-        word_embs, hidden = self.rnn(e, (self.init_hidden, self.init_cell))
+        word_embs, hidden = self.rnn(e, (init_hidden, init_cell))
         word_embs = word_embs.transpose(1, 2)  # -> BATCH x D_HIDDEN x seq_len
         sent_embs = hidden[0].transpose(0, 1).contiguous()  # -> BATCH x 2 x D_HIDDEN/2
-        sent_embs = sent_embs.view(BATCH, -1)  # -> BATCH x D_HIDDEN
+        sent_embs = sent_embs.view(batch_size, -1)  # -> BATCH x D_HIDDEN
         return word_embs, sent_embs
 
 

@@ -1,4 +1,4 @@
-D_GF = 32
+D_GF = 64
 D_DF = 64
 D_WORD = 256
 D_HIDDEN = 128
