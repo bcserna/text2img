@@ -42,9 +42,11 @@ class CUBSubset(Dataset):
 
     def get_caption(self, index):
         caption_idx = random.randint(0, CAPTIONS - 1)
-        # caption = self.captions[index][caption_idx]
         caption = self.data[f'caption_{caption_idx}'].iloc[index]
-        encoded = [self.vocab.get(w, self.vocab[UNK_TOKEN]) for w in caption.split()]
+        return self.encode_text(caption)
+
+    def encode_text(self, text):
+        encoded = [self.vocab.get(w, self.vocab[UNK_TOKEN]) for w in text.split()]
         encoded = encoded[:CAP_MAX_LEN - 1]  # address END token
         cap_len = len(encoded)
         encoded = encoded + [self.vocab[END_TOKEN]] * (CAP_MAX_LEN - cap_len)

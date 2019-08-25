@@ -1,6 +1,9 @@
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+from torchvision.utils import save_image
+import time
+import os
 from tqdm import tqdm
 
 from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA
@@ -17,7 +20,10 @@ class AttnGAN:
         self.damsm.txt_enc.eval(), self.damsm.img_enc.eval()
         self.device = device
 
-    def train(self, dataset, epoch, batch_size=GAN_BATCH):
+    def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=1, nb_test_samples=2):
+        start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+        os.makedirs(start_time)
+
         loader_config = {
             'batch_size': batch_size,
             'shuffle': True,
@@ -25,7 +31,6 @@ class AttnGAN:
             'collate_fn': dataset.collate_fn
         }
         train_loader = DataLoader(dataset.train, **loader_config)
-        # test_loader = DataLoader(dataset.test, **loader_config)
 
         metrics = {
             'loss': {
@@ -53,7 +58,7 @@ class AttnGAN:
         fake_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(0), requires_grad=False).to(self.device)
         match_labels = nn.Parameter(torch.LongTensor(range(batch_size)), requires_grad=False).to(self.device)
 
-        noise = nn.Parameter(torch.FloatTensor(batch_size, D_Z), requires_grad=False).to(self.device)
+        noise = torch.FloatTensor(batch_size, D_Z, requires_grad=False).to(self.device)
         for e in tqdm(range(epoch), desc='Epochs'):
             self.gen.train(), self.disc.train()
             g_loss = 0
@@ -72,7 +77,6 @@ class AttnGAN:
                 self.gen.zero_grad(), self.disc.zero_grad()
                 with torch.no_grad():
                     word_embs, sent_embs = self.damsm.txt_enc(batch['caption'])
-                # word_embs, sent_embs = word_embs.detach(), sent_embs.detach()
                 attn_mask = torch.tensor(batch['caption']).to(self.device) == dataset.vocab[END_TOKEN]
                 # Generate images
                 noise.data.normal_(0, 1)
@@ -173,6 +177,11 @@ class AttnGAN:
                        f'f-acc({fake_accuracy[2]:04.3f})  '
                        f'm-acc({mismatched_accuracy[2]:04.3f})')
 
+            if e % test_sample_every == 0:
+                texts = [dataset.test.data['caption_0'].iloc[i] for i in range(nb_test_samples)]
+                generated_samples = self.generate_from_text(texts, dataset)
+                self._save_generated(generated_samples, e, start_time)
+
         return metrics
 
     @staticmethod
@@ -180,3 +189,27 @@ class AttnGAN:
         loss = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
         loss = torch.mean(loss).mul_(-0.5)
         return loss
+
+    def generate_from_text(self, texts, dataset, noise=None):
+        encoded = [dataset.train.encode_text(t) for t in texts]
+        generated = self.generate_from_encoded_text(encoded, dataset, noise)
+        return generated
+
+    def generate_from_encoded_text(self, encoded, dataset, noise=None):
+        with torch.no_grad():
+            w_emb, s_emb = self.damsm.txt_enc(encoded)
+            attn_mask = torch.tensor(encoded).to(self.device) == dataset.vocab[END_TOKEN]
+            if noise is None:
+                noise = torch.FloatTensor(len(encoded), D_Z, device=self.device)
+                noise.data.normal_(0, 1)
+            generated, att, mu, logvar = self.gen(noise, s_emb, w_emb, attn_mask)
+        return generated
+
+    def _save_generated(self, generated, epoch, dir):
+        nb_samples = generated[0].size(0)
+        save_dir = f'dir/epoch_{epoch}'
+        os.makedirs(save_dir)
+        for i in range(nb_samples):
+            save_image(generated[0][i], f'{save_dir}/{i}_64')
+            save_image(generated[1][i], f'{save_dir}/{i}_128')
+            save_image(generated[2][i], f'{save_dir}/{i}_256')
