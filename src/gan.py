@@ -21,7 +21,7 @@ class AttnGAN:
         self.device = device
 
     def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=1, nb_test_samples=2):
-        start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+        start_time = time.strftime("%Y-%m-%d-%H-%M-%S", time.gmtime())
         os.makedirs(start_time)
 
         loader_config = {
@@ -207,9 +207,9 @@ class AttnGAN:
 
     def _save_generated(self, generated, epoch, dir):
         nb_samples = generated[0].size(0)
-        save_dir = f'dir/epoch_{epoch}'
+        save_dir = f'{dir}/epoch_{epoch}'
         os.makedirs(save_dir)
         for i in range(nb_samples):
-            save_image(generated[0][i], f'{save_dir}/{i}_64')
-            save_image(generated[1][i], f'{save_dir}/{i}_128')
-            save_image(generated[2][i], f'{save_dir}/{i}_256')
+            save_image(generated[0][i], f'{save_dir}/{i}_64.jpg')
+            save_image(generated[1][i], f'{save_dir}/{i}_128.jpg')
+            save_image(generated[2][i], f'{save_dir}/{i}_256.jpg')
