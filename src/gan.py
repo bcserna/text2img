@@ -58,7 +58,7 @@ class AttnGAN:
         fake_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(0), requires_grad=False).to(self.device)
         match_labels = nn.Parameter(torch.LongTensor(range(batch_size)), requires_grad=False).to(self.device)
 
-        noise = torch.FloatTensor(batch_size, D_Z, requires_grad=False).to(self.device)
+        noise = torch.FloatTensor(batch_size, D_Z, device=self.device)
         for e in tqdm(range(epoch), desc='Epochs'):
             self.gen.train(), self.disc.train()
             g_loss = 0
