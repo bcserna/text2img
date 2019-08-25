@@ -58,7 +58,7 @@ class AttnGAN:
         fake_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(0), requires_grad=False).to(self.device)
         match_labels = nn.Parameter(torch.LongTensor(range(batch_size)), requires_grad=False).to(self.device)
 
-        noise = torch.FloatTensor(batch_size, D_Z, device=self.device)
+        noise = torch.FloatTensor(batch_size, D_Z).to(self.device)
         for e in tqdm(range(epoch), desc='Epochs'):
             self.gen.train(), self.disc.train()
             g_loss = 0
@@ -200,7 +200,7 @@ class AttnGAN:
             w_emb, s_emb = self.damsm.txt_enc(encoded)
             attn_mask = torch.tensor(encoded).to(self.device) == dataset.vocab[END_TOKEN]
             if noise is None:
-                noise = torch.FloatTensor(len(encoded), D_Z, device=self.device)
+                noise = torch.FloatTensor(len(encoded), D_Z).to(self.device)
                 noise.data.normal_(0, 1)
             generated, att, mu, logvar = self.gen(noise, s_emb, w_emb, attn_mask)
         return generated
