@@ -6,12 +6,12 @@ import re
 
 import torch
 from PIL import Image
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import numpy as np
 import torchvision.transforms as transforms
 from tqdm import tqdm
 
-from src.config import BASE_SIZE, BRANCH_NUM, CAPTIONS, END_TOKEN, CAP_MAX_LEN, BATCH, MIN_WORD_FREQ, UNK_TOKEN
+from src.config import BASE_SIZE, BRANCH_NUM, CAPTIONS, END_TOKEN, CAP_MAX_LEN, MIN_WORD_FREQ, UNK_TOKEN
 
 
 class CUBSubset(Dataset):

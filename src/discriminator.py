@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from src.config import *
+from src.config import D_DF, D_HIDDEN, DEVICE
 from src.util import conv3x3, count_params
 
 

@@ -6,10 +6,10 @@ import numpy as np
 import os
 
 from torch.utils.data import DataLoader
-from tqdm import tqdm, trange
+from tqdm import tqdm
 
 from src.attention import func_attention
-from src.config import GAMMA_3, CUDA, BATCH, GAMMA_1, CAP_MAX_LEN, GAMMA_2, DEVICE
+from src.config import GAMMA_3, BATCH, GAMMA_1, CAP_MAX_LEN, GAMMA_2, DEVICE
 from src.encoder import ImageEncoder, TextEncoder
 
 

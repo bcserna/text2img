@@ -3,7 +3,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.config import *
+from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA
 from src.discriminator import Discriminator
 from src.generator import Generator
 from src.util import roll_tensor

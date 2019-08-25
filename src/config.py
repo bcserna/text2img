@@ -28,7 +28,6 @@ CAP_MAX_LEN = 18
 END_TOKEN = '<END>'
 UNK_TOKEN = '<UNK>'
 
-CUDA = False
 DEVICE = 'cuda'
 
 GAMMA_1 = 4.0

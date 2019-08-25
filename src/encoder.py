@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torchvision
 import warnings
 
-from src.config import D_HIDDEN, P_DROP, D_WORD, BATCH, D_COND, CUDA, IMG_WEIGHT_INIT_RANGE, DEVICE
+from src.config import D_HIDDEN, P_DROP, D_WORD, D_COND, IMG_WEIGHT_INIT_RANGE, DEVICE
 from src.util import conv1x1, count_params
 
 
