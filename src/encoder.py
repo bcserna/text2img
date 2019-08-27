@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torchvision
 import warnings
 
-from src.config import D_HIDDEN, P_DROP, D_WORD, D_COND, IMG_WEIGHT_INIT_RANGE, DEVICE
+from src.config import D_HIDDEN, P_DROP, D_WORD, IMG_WEIGHT_INIT_RANGE, DEVICE
 from src.util import conv1x1, count_params
 
 
@@ -119,27 +119,3 @@ class ImageEncoder(nn.Module):
         global_features = self.global_proj(x)
 
         return local_features, global_features
-
-
-class CondAug(nn.Module):
-    def __init__(self, device=DEVICE):
-        super().__init__()
-        self.device = device
-        self.fc = nn.Linear(D_HIDDEN, D_COND * 4, bias=True).to(device)
-
-    def encode(self, text_emb):
-        x = F.glu(self.fc(text_emb))
-        mu = x[:, :D_COND]
-        logvar = x[:, D_COND:]
-        return mu, logvar
-
-    def reparam(self, mu, logvar):
-        std = logvar.mul(0.5).exp_().to(self.device)
-        eps = torch.FloatTensor(std.size()).normal_().to(self.device)
-        eps = nn.Parameter(eps)
-        return eps.mul(std).add_(mu)
-
-    def forward(self, text_emb):
-        mu, logvar = self.encode(text_emb)
-        c_code = self.reparam(mu, logvar)
-        return c_code, mu, logvar

@@ -1,9 +1,9 @@
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from src.attention import Attention
-from src.config import D_GF, D_Z, D_COND, D_HIDDEN, RESIDUALS
-from src.encoder import CondAug
+from src.config import D_GF, D_Z, D_COND, D_HIDDEN, RESIDUALS, DEVICE
 from src.util import upsample_block, residual_block, conv3x3, count_params
 
 
@@ -18,7 +18,8 @@ class Generator0(nn.Module):
         )
 
         self.upsample_steps = nn.Sequential(
-            *[upsample_block(self.d_gf // (2 ** i), self.d_gf // (2 ** (i + 1))) for i in range(4)])
+            *[upsample_block(self.d_gf // (2 ** i), self.d_gf // (2 ** (i + 1))) for i in range(4)]
+        )
 
         p_trainable, p_non_trainable = count_params(self)
         print(f'Generator0 params: trainable {p_trainable} - non_trainable {p_non_trainable}')
@@ -101,3 +102,27 @@ class Generator(nn.Module):
         attention.append(a2)
 
         return generated, attention, mu, logvar
+
+
+class CondAug(nn.Module):
+    def __init__(self, device=DEVICE):
+        super().__init__()
+        self.device = device
+        self.fc = nn.Linear(D_HIDDEN, D_COND * 4, bias=True).to(device)
+
+    def encode(self, text_emb):
+        x = F.glu(self.fc(text_emb))
+        mu = x[:, :D_COND]
+        logvar = x[:, D_COND:]
+        return mu, logvar
+
+    def reparam(self, mu, logvar):
+        std = logvar.mul(0.5).exp_().to(self.device)
+        eps = torch.FloatTensor(std.size()).normal_().to(self.device)
+        eps = nn.Parameter(eps)
+        return eps.mul(std).add_(mu)
+
+    def forward(self, text_emb):
+        mu, logvar = self.encode(text_emb)
+        c_code = self.reparam(mu, logvar)
+        return c_code, mu, logvar
