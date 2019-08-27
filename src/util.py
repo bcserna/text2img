@@ -41,7 +41,7 @@ def upsample_block(in_planes, out_planes):
         Interpolate(scale_factor=2, mode='nearest'),
         conv3x3(in_planes, out_planes * 2),
         nn.BatchNorm2d(out_planes * 2),
-        nn.modules.activation.GLU()
+        nn.modules.activation.GLU(dim=1)
     )
 
 
@@ -49,7 +49,7 @@ def residual_block(channels):
     return nn.Sequential(
         conv3x3(channels, channels * 2),
         nn.BatchNorm2d(channels * 2),
-        nn.modules.activation.GLU(dim=1),
+        nn.modules.activation.GLU(),
         conv3x3(channels, channels),
         nn.BatchNorm2d(channels)
     )
