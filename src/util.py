@@ -41,7 +41,7 @@ def upsample_block(in_planes, out_planes):
         Interpolate(scale_factor=2, mode='nearest'),
         conv3x3(in_planes, out_planes * 2),
         nn.BatchNorm2d(out_planes * 2),
-        nn.modules.activation.GLU(dim=1)
+        nn.modules.activation.GLU()
     )
 
 
