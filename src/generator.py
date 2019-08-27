@@ -14,7 +14,7 @@ class Generator0(nn.Module):
         self.fc = nn.Sequential(
             nn.Linear(D_Z + D_COND, self.d_gf * 4 * 4 * 2, bias=False),
             nn.BatchNorm1d(self.d_gf * 4 * 4 * 2),
-            nn.modules.activation.GLU()
+            nn.modules.activation.GLU(dim=1)
         )
 
         self.upsample_steps = nn.Sequential(
