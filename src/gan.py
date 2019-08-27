@@ -54,8 +54,8 @@ class AttnGAN:
                                             betas=(0.5, 0.999))
                            for d in discriminators]
 
-        real_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(1), requires_grad=False).to(self.device)
-        fake_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(0), requires_grad=False).to(self.device)
+        real_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(0.9), requires_grad=False).to(self.device)
+        fake_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(0.1), requires_grad=False).to(self.device)
         match_labels = nn.Parameter(torch.LongTensor(range(batch_size)), requires_grad=False).to(self.device)
 
         noise = torch.FloatTensor(batch_size, D_Z).to(self.device)
@@ -113,16 +113,16 @@ class AttnGAN:
 
                 s1_loss, s2_loss = self.damsm.sentence_loss(global_features, sent_embs, batch['label'], match_labels)
                 s_loss = (s1_loss + s2_loss) * LAMBDA
-                s_loss.backward(retain_graph=True)
 
                 kl_loss = self.KL_loss(mu, logvar)
-                kl_loss.backward()
-
-                gen_optimizer.step()
 
                 g_total = w_loss + s_loss + kl_loss
+
                 for error in fake_errors:
                     g_total += error
+
+                g_total.backward()
+                gen_optimizer.step()
 
                 avg_g_loss = g_total.item() / batch_size
                 g_loss += avg_g_loss
@@ -207,8 +207,9 @@ class AttnGAN:
 
     def _save_generated(self, generated, epoch, dir):
         nb_samples = generated[0].size(0)
-        save_dir = f'{dir}/epoch_{epoch}'
+        save_dir = f'{dir}/epoch_{epoch:03}'
         os.makedirs(save_dir)
+
         for i in range(nb_samples):
             save_image(generated[0][i], f'{save_dir}/{i}_64.jpg')
             save_image(generated[1][i], f'{save_dir}/{i}_128.jpg')
