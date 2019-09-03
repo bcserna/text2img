@@ -26,12 +26,10 @@ class CUBSubset(Dataset):
             self.images = list(self.load_images())
 
     def load_images(self):
-        # self.images = [self.get_image(i) for i in tqdm(range(1, len(self)), desc='Preloading images')]
         for i in tqdm(range(len(self)), desc='Preloading images'):
             yield self.get_image(i)
 
     def __getitem__(self, index):
-        # index = index + 1  # Image index starts from 1
         imgs = self.get_image(index)
         caption = self.get_caption(index)
         label = self.data['class'].iloc[index]
@@ -78,7 +76,6 @@ class CUBSubset(Dataset):
             else:
                 re_img = img
             imgs.append(self.normalize(re_img))
-
         return imgs
 
 
