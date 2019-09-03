@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.attention import func_attention
-from src.config import GAMMA_3, BATCH, GAMMA_1, CAP_MAX_LEN, GAMMA_2, DEVICE
+from src.config import GAMMA_3, BATCH, GAMMA_1, CAP_MAX_LEN, GAMMA_2, DEVICE, DAMSM_LR
 from src.encoder import ImageEncoder, TextEncoder
 
 
@@ -52,7 +52,7 @@ class DAMSM:
             if v.requires_grad:
                 params.append(v)
 
-        optim = torch.optim.Adam(params, lr=2e-4, betas=(0.5, 0.999))
+        optim = torch.optim.Adam(params, lr=DAMSM_LR, betas=(0.5, 0.999))
 
         img_cap_pair_labels = nn.Parameter(torch.LongTensor(range(batch_size)), requires_grad=False).to(self.device)
 
