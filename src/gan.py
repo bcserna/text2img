@@ -9,7 +9,7 @@ from tqdm import tqdm
 from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA
 from src.discriminator import Discriminator
 from src.generator import Generator
-from src.util import roll_tensor
+from src.util import roll_tensor, init_weights
 
 
 class AttnGAN:
@@ -19,6 +19,7 @@ class AttnGAN:
         self.damsm = damsm
         self.damsm.txt_enc.eval(), self.damsm.img_enc.eval()
         self.device = device
+        self.gen.apply(init_weights), self.disc.apply(init_weights)
 
     def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=1, nb_test_samples=2):
         start_time = time.strftime("%Y-%m-%d-%H-%M-%S", time.gmtime())

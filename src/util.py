@@ -3,6 +3,19 @@ from torch import nn
 import torch.nn.functional as F
 
 
+def init_weights(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        nn.init.orthogonal(m.weight.data, 1.0)
+    elif classname.find('BatchNorm') != -1:
+        m.weight.data.normal_(1.0, 0.02)
+        m.bias.data.fill_(0)
+    elif classname.find('Linear') != -1:
+        nn.init.orthogonal(m.weight.data, 1.0)
+        if m.bias is not None:
+            m.bias.data.fill_(0.0)
+
+
 def roll_tensor(t, n, dim=0):
     return torch.cat((t[-n:], t[:-n]), dim=dim)
 
