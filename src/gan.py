@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
+import numpy as np
 import time
 import os
 from tqdm import tqdm
@@ -20,6 +21,16 @@ class AttnGAN:
         self.damsm.txt_enc.eval(), self.damsm.img_enc.eval()
         self.device = device
         self.gen.apply(init_weights), self.disc.apply(init_weights)
+
+        self.gen_optimizer = torch.optim.Adam(self.gen.parameters(),
+                                              lr=GENERATOR_LR,
+                                              betas=(0.5, 0.999))
+
+        self.discriminators = [self.disc.d64, self.disc.d128, self.disc.d256]
+        self.disc_optimizers = [torch.optim.Adam(d.parameters(),
+                                                 lr=DISCRIMINATOR_LR,
+                                                 betas=(0.5, 0.999))
+                                for d in self.discriminators]
 
     def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=1, nb_test_samples=2):
         start_time = time.strftime("%Y-%m-%d-%H-%M-%S", time.gmtime())
@@ -41,19 +52,11 @@ class AttnGAN:
             'accuracy': {
                 'real': [],
                 'fake': [],
-                'mismatched': []
+                'mismatched': [],
+                'unconditional_real': [],
+                'unconditional_fake': []
             }
         }
-
-        gen_optimizer = torch.optim.Adam(self.gen.parameters(),
-                                         lr=GENERATOR_LR,
-                                         betas=(0.5, 0.999))
-
-        discriminators = [self.disc.d64, self.disc.d128, self.disc.d256]
-        disc_optimizers = [torch.optim.Adam(d.parameters(),
-                                            lr=DISCRIMINATOR_LR,
-                                            betas=(0.5, 0.999))
-                           for d in discriminators]
 
         real_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(0.9), requires_grad=False).to(self.device)
         fake_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(0.1), requires_grad=False).to(self.device)
@@ -63,82 +66,42 @@ class AttnGAN:
         for e in tqdm(range(epoch), desc='Epochs'):
             self.gen.train(), self.disc.train()
             g_loss = 0
-            d_loss = [0, 0, 0]
-            real_accuracy = [0, 0, 0]
-            fake_accuracy = [0, 0, 0]
-            mismatched_accuracy = [0, 0, 0]
+            d_loss = np.zeros(3, dtype=float)
+            real_acc = np.zeros(3, dtype=float)
+            fake_acc = np.zeros(3, dtype=float)
+            mismatched_acc = np.zeros(3, dtype=float)
+            uncond_real_acc = np.zeros(3, dtype=float)
+            uncond_fake_acc = np.zeros(3, dtype=float)
 
             train_pbar = tqdm(train_loader, desc='Training', leave=False)
             for batch in train_pbar:
-                batch_d_loss = [0, 0, 0]
-                batch_real_accuracy = [0, 0, 0]
-                batch_fake_accuracy = [0, 0, 0]
-                batch_mismatched_accuracy = [0, 0, 0]
-
                 self.gen.zero_grad(), self.disc.zero_grad()
+                real_imgs = [batch['img64'], batch['img128'], batch['img256']]
+
                 with torch.no_grad():
                     word_embs, sent_embs = self.damsm.txt_enc(batch['caption'])
                 attn_mask = torch.tensor(batch['caption']).to(self.device) == dataset.vocab[END_TOKEN]
+
                 # Generate images
                 noise.data.normal_(0, 1)
                 generated, att, mu, logvar = self.gen(noise, sent_embs, word_embs, attn_mask)
+
                 # Discriminator loss
-                real_imgs = [batch['img64'], batch['img128'], batch['img256']]
-                real_features = self.disc(real_imgs)
-                fake_features = self.disc(generated)
+                batch_d_loss, batch_real_acc, batch_fake_acc, batch_mismatched_acc, batch_uncond_real_acc, batch_uncond_fake_acc = self.discriminator_step(
+                    real_imgs, generated, sent_embs, real_labels, fake_labels)
 
-                real_logits = self.disc.get_logits(real_features, sent_embs)
-                fake_logits = self.disc.get_logits(fake_features, sent_embs)
-
-                real_errors = [nn.functional.binary_cross_entropy(l, real_labels) for l in real_logits]
-                # Contributes to generator loss too
-                fake_errors = [nn.functional.binary_cross_entropy(l, fake_labels) for l in fake_logits]
-
-                mismatched_logits = self.disc.get_logits(real_features, roll_tensor(sent_embs, 1))
-                mismatched_errors = [nn.functional.binary_cross_entropy(l, fake_labels) for l in mismatched_logits]
-
-                disc_errors = [real + fake + mismatched for real, fake, mismatched in
-                               zip(real_errors, fake_errors, mismatched_errors)]
-
-                for error, optimizer, disc in zip(disc_errors, disc_optimizers, range(3)):
-                    error.backward(retain_graph=True)
-                    optimizer.step()
-                    batch_d_loss[disc] = error.item() / batch_size
-                    d_loss[disc] += batch_d_loss[disc]
+                d_loss += batch_d_loss
+                real_acc += batch_real_acc
+                fake_acc += batch_fake_acc
+                mismatched_acc += batch_mismatched_acc
+                uncond_real_acc += batch_uncond_real_acc
+                uncond_fake_acc += batch_uncond_fake_acc
 
                 # Generator loss
-                local_features, global_features = self.damsm.img_enc(generated[-1])
-
-                w1_loss, w2_loss, _ = self.damsm.words_loss(local_features, word_embs, batch['label'], match_labels)
-                w_loss = (w1_loss + w2_loss) * LAMBDA
-
-                s1_loss, s2_loss = self.damsm.sentence_loss(global_features, sent_embs, batch['label'], match_labels)
-                s_loss = (s1_loss + s2_loss) * LAMBDA
-
-                kl_loss = self.KL_loss(mu, logvar)
-
-                g_total = w_loss + s_loss + kl_loss
-
-                for error in fake_errors:
-                    g_total += error
-
-                g_total.backward()
-                gen_optimizer.step()
-
+                g_total = self.generator_step(generated, word_embs, sent_embs, mu, logvar, real_labels, batch['label'],
+                                              match_labels)
                 avg_g_loss = g_total.item() / batch_size
                 g_loss += avg_g_loss
-
-                for real, fake, mismatched, i in zip(real_logits, fake_logits, mismatched_logits, range(3)):
-                    # Real images should be classified as real
-                    batch_real_accuracy[i] = (real > 0.5).sum().item() / real.size(0)
-                    # Generated images should be classified as fake
-                    batch_fake_accuracy[i] = (fake <= 0.5).sum().item() / fake.size(0)
-                    # Images with mismatched descriptions should be classified as fake
-                    batch_mismatched_accuracy[i] = (mismatched <= 0.5).sum().item() / mismatched.size(0)
-
-                    real_accuracy[i] += batch_real_accuracy[i]
-                    fake_accuracy[i] += batch_fake_accuracy[i]
-                    mismatched_accuracy[i] += batch_mismatched_accuracy[i]
 
                 train_pbar.set_description(f'Training (G: {avg_g_loss:05.4f}'
                                            f'  D64: {batch_d_loss[0]:05.4f}'
@@ -146,37 +109,36 @@ class AttnGAN:
                                            f'  D256: {batch_d_loss[2]:05.4f})')
 
             batches = len(train_loader)
+
             g_loss /= batches
-            for i in range(len(d_loss)):
-                d_loss[i] /= batches
-                real_accuracy[i] /= batches
-                fake_accuracy[i] /= batches
-                mismatched_accuracy[i] /= batches
+
+            d_loss /= batches
+            real_acc /= batches
+            fake_acc /= batches
+            mismatched_acc /= batches
+            uncond_real_acc /= batches
+            uncond_fake_acc /= batches
 
             metrics['loss']['g'].append(g_loss)
             metrics['loss']['d'].append(d_loss)
-            metrics['accuracy']['real'].append(real_accuracy)
-            metrics['accuracy']['fake'].append(fake_accuracy)
-            metrics['accuracy']['mismatched'].append(mismatched_accuracy)
+            metrics['accuracy']['real'].append(real_acc)
+            metrics['accuracy']['fake'].append(fake_acc)
+            metrics['accuracy']['mismatched'].append(mismatched_acc)
+            metrics['accuracy']['unconditional_real'].append(uncond_real_acc)
+            metrics['accuracy']['unconditional_fake'].append(uncond_fake_acc)
 
             sep = '_' * 10
             tqdm.write(f'{sep}Epoch {e}{sep}')
             tqdm.write(f'Generator avg loss: {g_loss:05.4f}')
-            tqdm.write(f'Discriminator0 avg: '
-                       f'loss({d_loss[0]:05.4f})  '
-                       f'r-acc({real_accuracy[0]:04.3f})  '
-                       f'f-acc({fake_accuracy[0]:04.3f})  '
-                       f'm-acc({mismatched_accuracy[0]:04.3f})')
-            tqdm.write(f'Discriminator1 avg: '
-                       f'loss({d_loss[1]:05.4f})  '
-                       f'r-acc({real_accuracy[1]:04.3f})  '
-                       f'f-acc({fake_accuracy[1]:04.3f})  '
-                       f'm-acc({mismatched_accuracy[1]:04.3f})')
-            tqdm.write(f'Discriminator2 avg: '
-                       f'loss({d_loss[2]:05.4f})  '
-                       f'r-acc({real_accuracy[2]:04.3f})  '
-                       f'f-acc({fake_accuracy[2]:04.3f})  '
-                       f'm-acc({mismatched_accuracy[2]:04.3f})')
+
+            for i, _ in enumerate(self.discriminators):
+                tqdm.write(f'Discriminator{i} avg: '
+                           f'loss({d_loss[i]:05.4f})  '
+                           f'r-acc({real_acc[i]:04.3f})  '
+                           f'f-acc({fake_acc[i]:04.3f})  '
+                           f'm-acc({mismatched_acc[i]:04.3f})  '
+                           f'ur-acc({uncond_real_acc[i]:04.3f})  '
+                           f'uf-acc({uncond_fake_acc[i]:04.3f})')
 
             if e % test_sample_every == 0:
                 texts = [dataset.test.data['caption_0'].iloc[i] for i in range(nb_test_samples)]
@@ -190,6 +152,78 @@ class AttnGAN:
         loss = mu.pow(2).add_(logvar.exp()).mul_(-1).add_(1).add_(logvar)
         loss = torch.mean(loss).mul_(-0.5)
         return loss
+
+    def generator_step(self, generated_imgs, word_embs, sent_embs, mu, logvar, real_labels, class_labels, match_labels):
+        local_features, global_features = self.damsm.img_enc(generated_imgs[-1])
+
+        w1_loss, w2_loss, _ = self.damsm.words_loss(local_features, word_embs, class_labels, match_labels)
+        w_loss = (w1_loss + w2_loss) * LAMBDA
+
+        s1_loss, s2_loss = self.damsm.sentence_loss(global_features, sent_embs, class_labels, match_labels)
+        s_loss = (s1_loss + s2_loss) * LAMBDA
+
+        kl_loss = self.KL_loss(mu, logvar)
+
+        g_loss = w_loss + s_loss + kl_loss
+
+        for i, d in enumerate(self.discriminators):
+            features = d(generated_imgs[i])
+            fake_logits = d.logit(features, sent_embs)
+            disc_error = nn.functional.binary_cross_entropy(fake_logits, real_labels)
+
+            uncond_fake_logits = d.logit(features)
+            uncond_disc_error = nn.functional.binary_cross_entropy(uncond_fake_logits, real_labels)
+
+            g_loss += disc_error + uncond_disc_error
+
+        g_loss.backward()
+        self.gen_optimizer.step()
+
+        return g_loss
+
+    def discriminator_step(self, real_imgs, generated_imgs, sent_embs, real_labels, fake_labels):
+        avg_d_loss = [0, 0, 0]
+        real_accuracy = [0, 0, 0]
+        fake_accuracy = [0, 0, 0]
+        mismatched_accuracy = [0, 0, 0]
+        uncond_real_accuracy = [0, 0, 0]
+        uncond_fake_accuracy = [0, 0, 0]
+
+        batch_size = real_labels.size(0)
+
+        for i, d in enumerate(self.discriminators):
+            real_features = d(real_imgs[i].to(self.device))
+            fake_features = d(generated_imgs[i].detach())
+
+            real_logits = d.logit(real_features, sent_embs)
+            real_error = nn.functional.binary_cross_entropy(real_logits, real_labels)
+            # Real images should be classified as real
+            real_accuracy[i] = (real_logits > 0.5).sum().item() / batch_size
+
+            fake_logits = d.logit(fake_features, sent_embs)
+            fake_error = nn.functional.binary_cross_entropy(fake_logits, fake_labels)
+            # Generated images should be classified as fake
+            fake_accuracy[i] = (fake_logits <= 0.5).sum().item() / batch_size
+
+            mismatched_logits = d.logit(real_features, roll_tensor(sent_embs, 1))
+            mismatched_error = nn.functional.binary_cross_entropy(mismatched_logits, fake_labels)
+            # Images with mismatched descriptions should be classified as fake
+            mismatched_accuracy[i] = (mismatched_logits <= 0.5).sum().item() / batch_size
+
+            uncond_real_logits = d.logit(real_features)
+            uncond_real_error = nn.functional.binary_cross_entropy(uncond_real_logits, real_labels)
+            uncond_real_accuracy[i] = (uncond_real_logits > 0.5).sum().item() / batch_size
+
+            uncond_fake_logits = d.logit(fake_features)
+            uncond_fake_error = nn.functional.binary_cross_entropy(uncond_fake_logits, fake_labels)
+            uncond_fake_accuracy[i] = (uncond_fake_logits <= 0.5).sum().item() / batch_size
+
+            error = ((real_error + uncond_real_error) / 2 + fake_error + uncond_fake_error + mismatched_error) / 3
+            error.backward()
+            self.disc_optimizers[i].step()
+            avg_d_loss[i] = error.item() / batch_size
+
+        return avg_d_loss, real_accuracy, fake_accuracy, mismatched_accuracy, uncond_real_accuracy, uncond_fake_accuracy
 
     def generate_from_text(self, texts, dataset, noise=None):
         encoded = [dataset.train.encode_text(t) for t in texts]
