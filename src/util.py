@@ -16,7 +16,7 @@ def init_weights(m):
             m.bias.data.fill_(0.0)
 
 
-def roll_tensor(t, n, dim=0):
+def rotate_tensor(t, n, dim=0):
     return torch.cat((t[-n:], t[:-n]), dim=dim)
 
 

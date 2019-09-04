@@ -10,7 +10,7 @@ from tqdm import tqdm
 from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA
 from src.discriminator import Discriminator
 from src.generator import Generator
-from src.util import roll_tensor, init_weights
+from src.util import rotate_tensor, init_weights
 
 
 class AttnGAN:
@@ -205,7 +205,7 @@ class AttnGAN:
             # Generated images should be classified as fake
             fake_accuracy[i] = (fake_logits <= 0.5).sum().item() / batch_size
 
-            mismatched_logits = d.logit(real_features, roll_tensor(sent_embs, 1))
+            mismatched_logits = d.logit(real_features, rotate_tensor(sent_embs, 1))
             mismatched_error = nn.functional.binary_cross_entropy(mismatched_logits, fake_labels)
             # Images with mismatched descriptions should be classified as fake
             mismatched_accuracy[i] = (mismatched_logits <= 0.5).sum().item() / batch_size
