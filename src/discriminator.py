@@ -48,7 +48,7 @@ class DiscriminatorLogitBlock(nn.Module):
         self.jointConv = conv3x3_LReLU(D_DF * 8 + D_HIDDEN, D_DF * 8)
         self.logits = nn.Sequential(
             nn.Conv2d(D_DF * 8, 1, kernel_size=4, stride=4),
-            nn.Sigmoid()
+            # nn.Sigmoid()
         )
 
     def forward(self, h, condition=None):
