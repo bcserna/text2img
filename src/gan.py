@@ -189,7 +189,7 @@ class AttnGAN:
         smooth_fake_labels = fake_labels + fake_smoothing
         # Add label noise
         p_flip = 0.05
-        flip_mask = torch.zeros(batch_size, dtype=torch.uint8).bernoulli_(p_flip)
+        flip_mask = torch.zeros(batch_size).bernoulli_(p_flip).type(torch.bool)
         smooth_real_labels[flip_mask], smooth_fake_labels[flip_mask] = smooth_fake_labels[flip_mask], \
                                                                        smooth_real_labels[flip_mask]
 
