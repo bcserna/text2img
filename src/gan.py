@@ -7,7 +7,7 @@ import time
 import os
 from tqdm import tqdm
 
-from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA
+from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA, MODEL_DIR
 from src.discriminator import Discriminator
 from src.generator import Generator
 from src.util import rotate_tensor, init_weights
@@ -263,3 +263,19 @@ class AttnGAN:
             save_image(generated[0][i], f'{save_dir}/{i}_64.jpg')
             save_image(generated[1][i], f'{save_dir}/{i}_128.jpg')
             save_image(generated[2][i], f'{save_dir}/{i}_256.jpg')
+
+    def save(self, name, save_dir=MODEL_DIR):
+        os.makedirs(save_dir, exist_ok=True)
+        torch.save(self.gen, f'{save_dir}/{name}_generator.pt')
+        torch.save(self.disc, f'{save_dir}/{name}_discriminator.pt')
+
+    def load_(self, name, load_dir=MODEL_DIR):
+        self.gen.load_state_dict(torch.load(f'{load_dir}/{name}_generator.pt'))
+        self.disc.load_state_dict(torch.load(f'{load_dir}/{name}_discriminator.pt'))
+        self.gen.eval(), self.disc.eval()
+
+    @staticmethod
+    def load(name, load_dir, damsm):
+        attngan = AttnGAN(damsm)
+        attngan.load_(name, load_dir)
+        return attngan
