@@ -72,6 +72,7 @@ class AttnGAN:
             mismatched_acc = np.zeros(3, dtype=float)
             uncond_real_acc = np.zeros(3, dtype=float)
             uncond_fake_acc = np.zeros(3, dtype=float)
+            disc_skips = np.zeros(3, dtype=int)
 
             train_pbar = tqdm(train_loader, desc='Training', leave=False)
             for batch in train_pbar:
@@ -87,7 +88,7 @@ class AttnGAN:
                 generated, att, mu, logvar = self.gen(noise, sent_embs, word_embs, attn_mask)
 
                 # Discriminator loss (with label smoothing)
-                batch_d_loss, batch_real_acc, batch_fake_acc, batch_mismatched_acc, batch_uncond_real_acc, batch_uncond_fake_acc = self.discriminator_step(
+                batch_d_loss, batch_real_acc, batch_fake_acc, batch_mismatched_acc, batch_uncond_real_acc, batch_uncond_fake_acc, batch_disc_skips = self.discriminator_step(
                     real_imgs, generated, sent_embs, real_labels, fake_labels, 0.1, 0)
 
                 d_loss += batch_d_loss
@@ -96,6 +97,7 @@ class AttnGAN:
                 mismatched_acc += batch_mismatched_acc
                 uncond_real_acc += batch_uncond_real_acc
                 uncond_fake_acc += batch_uncond_fake_acc
+                disc_skips += batch_disc_skips
 
                 # Generator loss
                 g_total = self.generator_step(generated, word_embs, sent_embs, mu, logvar, real_labels, batch['label'],
@@ -138,7 +140,8 @@ class AttnGAN:
                            f'f-acc({fake_acc[i]:04.3f})  '
                            f'm-acc({mismatched_acc[i]:04.3f})  '
                            f'ur-acc({uncond_real_acc[i]:04.3f})  '
-                           f'uf-acc({uncond_fake_acc[i]:04.3f})')
+                           f'uf-acc({uncond_fake_acc[i]:04.3f})  '
+                           f'skips({disc_skips[i]})')
 
             if e % test_sample_every == 0:
                 texts = [dataset.test.data['caption_0'].iloc[i] for i in range(nb_test_samples)]
@@ -182,7 +185,7 @@ class AttnGAN:
         return g_loss
 
     def discriminator_step(self, real_imgs, generated_imgs, sent_embs, real_labels, fake_labels,
-                           real_smoothing, fake_smoothing):
+                           real_smoothing, fake_smoothing, skip_acc_threshold=0.9):
         batch_size = real_labels.size(0)
 
         smooth_real_labels = real_labels + real_smoothing
@@ -199,6 +202,7 @@ class AttnGAN:
         mismatched_accuracy = [0, 0, 0]
         uncond_real_accuracy = [0, 0, 0]
         uncond_fake_accuracy = [0, 0, 0]
+        skipped = [0, 0, 0]
 
         for i, d in enumerate(self.discriminators):
             real_features = d(real_imgs[i].to(self.device))
@@ -233,11 +237,14 @@ class AttnGAN:
             uncond_fake_accuracy[i] = (uncond_fake_logits >= 0).sum().item() / batch_size
 
             error = ((real_error + uncond_real_error) / 2 + fake_error + uncond_fake_error + mismatched_error) / 3
+            # if fake_accuracy[i] < skip_acc_threshold or real_accuracy[i] < 1 - skip_acc_threshold:
             error.backward()
             self.disc_optimizers[i].step()
+            # else:
+            #     skipped[i] = 1
             avg_d_loss[i] = error.item() / batch_size
 
-        return avg_d_loss, real_accuracy, fake_accuracy, mismatched_accuracy, uncond_real_accuracy, uncond_fake_accuracy
+        return avg_d_loss, real_accuracy, fake_accuracy, mismatched_accuracy, uncond_real_accuracy, uncond_fake_accuracy, skipped
 
     def generate_from_text(self, texts, dataset, noise=None):
         encoded = [dataset.train.encode_text(t) for t in texts]
@@ -266,8 +273,8 @@ class AttnGAN:
 
     def save(self, name, save_dir=MODEL_DIR):
         os.makedirs(save_dir, exist_ok=True)
-        torch.save(self.gen, f'{save_dir}/{name}_generator.pt')
-        torch.save(self.disc, f'{save_dir}/{name}_discriminator.pt')
+        torch.save(self.gen.state_dict(), f'{save_dir}/{name}_generator.pt')
+        torch.save(self.disc.state_dict(), f'{save_dir}/{name}_discriminator.pt')
 
     def load_(self, name, load_dir=MODEL_DIR):
         self.gen.load_state_dict(torch.load(f'{load_dir}/{name}_generator.pt'))
@@ -275,7 +282,7 @@ class AttnGAN:
         self.gen.eval(), self.disc.eval()
 
     @staticmethod
-    def load(name, load_dir, damsm):
+    def load(name, damsm, load_dir=MODEL_DIR):
         attngan = AttnGAN(damsm)
         attngan.load_(name, load_dir)
         return attngan
