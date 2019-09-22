@@ -150,8 +150,6 @@ class CUB:
         self.test = CUBSubset(self.data[self.data.train == 0], self.vocab, self.imsize, self.transforms,
                               self.normalize, preload=True)
 
-        print('Done.')
-
     @staticmethod
     def collate_fn(batch):
         ret = {
