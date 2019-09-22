@@ -32,8 +32,8 @@ class AttnGAN:
                                                  betas=(0.5, 0.999))
                                 for d in self.discriminators]
 
-    def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=1, nb_test_samples=2):
-        start_time = time.strftime("%Y-%m-%d-%H-%M-%S", time.gmtime())
+    def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=3, nb_test_samples=2):
+        start_time = time.strftime("%Y-%m-%d-%H-%M", time.gmtime())
         os.makedirs(start_time)
 
         loader_config = {
@@ -105,10 +105,10 @@ class AttnGAN:
                 avg_g_loss = g_total.item() / batch_size
                 g_loss += avg_g_loss
 
-                train_pbar.set_description(f'Training (G: {avg_g_loss:05.4f}'
-                                           f'  D64: {batch_d_loss[0]:05.4f}'
-                                           f'  D128: {batch_d_loss[1]:05.4f}'
-                                           f'  D256: {batch_d_loss[2]:05.4f})')
+                train_pbar.set_description(f'Training (G: {avg_g_loss:05.4f}  '
+                                           f'D64: {batch_d_loss[0]:05.4f}  '
+                                           f'D128: {batch_d_loss[1]:05.4f}  '
+                                           f'D256: {batch_d_loss[2]:05.4f})')
 
             batches = len(train_loader)
 
