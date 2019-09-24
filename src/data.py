@@ -26,7 +26,7 @@ class CUBSubset(Dataset):
             self.images = list(self.load_images())
 
     def load_images(self):
-        for i in tqdm(range(len(self)), desc='Preloading images'):
+        for i in tqdm(range(len(self)), desc='Preloading images', dynamic_ncols=True):
             yield self.get_image(i)
 
     def __getitem__(self, index):

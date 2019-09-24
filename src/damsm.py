@@ -60,12 +60,12 @@ class DAMSM:
         patience_step = 0
         min_test_loss = float('Inf')
         min_test_loss_epoch = 0
-        for e in tqdm(range(epoch), desc='Epochs', leave=True):
+        for e in tqdm(range(epoch), desc='Epochs', leave=True, dynamic_ncols=True):
             self.img_enc.train(), self.txt_enc.train()
             avg_train_loss = 0
             avg_test_loss = 0
 
-            train_pbar = tqdm(train_loader, leave=False, desc='Training')
+            train_pbar = tqdm(train_loader, leave=False, desc='Training', dynamic_ncols=True)
             for step, batch in enumerate(train_pbar):
                 self.img_enc.zero_grad(), self.txt_enc.zero_grad()
 
@@ -84,7 +84,7 @@ class DAMSM:
 
             self.img_enc.eval(), self.txt_enc.eval()
             with torch.no_grad():
-                for i, b in enumerate(tqdm(test_loader, leave=True, desc='Evaluating test set')):
+                for i, b in enumerate(tqdm(test_loader, leave=True, desc='Evaluating test set', dynamic_ncols=True)):
                     loss = self.batch_loss(b, img_cap_pair_labels)[0]
                     avg_test_loss += loss
 
