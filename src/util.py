@@ -11,7 +11,9 @@ from src.config import GAN_BATCH, DEVICE, D_Z, END_TOKEN
 
 
 def inception_score(gan, dataset, inception_model, batch_size=GAN_BATCH, samples=50000, splits=10, device=DEVICE):
+    training = gan.gen.training
     with torch.no_grad():
+        gan.gen.eval()
         inception_preds = np.zeros((samples, 1000))
 
         loader = DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=True,
@@ -53,6 +55,7 @@ def inception_score(gan, dataset, inception_model, batch_size=GAN_BATCH, samples
 
             scores.append(np.exp(np.mean(split_scores)))
 
+        gan.gen.train(mode=training)
         return np.mean(scores), np.std(scores)
 
 
