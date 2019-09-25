@@ -21,7 +21,7 @@ def inception_score(gan, dataset, inception_model, batch_size=GAN_BATCH, samples
 
         epochs = math.ceil(samples / (len(loader) * batch_size))
         nb_generated = 0
-        for _ in tqdm(range(epochs), desc='Generating samples for inception score'):
+        for _ in tqdm(range(epochs), desc='Generating samples for inception score', dynamic_ncols=True):
             for batch in loader:
                 word_embs, sent_embs = gan.damsm.txt_enc(batch['caption'])
                 attn_mask = torch.tensor(batch['caption']).to(device) == dataset.vocab[END_TOKEN]

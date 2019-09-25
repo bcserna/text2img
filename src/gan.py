@@ -64,7 +64,7 @@ class AttnGAN:
         match_labels = nn.Parameter(torch.LongTensor(range(batch_size)), requires_grad=False).to(self.device)
 
         noise = torch.FloatTensor(batch_size, D_Z).to(self.device)
-        for e in tqdm(range(epoch), desc='Epochs'):
+        for e in tqdm(range(epoch), desc='Epochs', dynamic_ncols=True):
             self.gen.train(), self.disc.train()
             g_loss = 0
             d_loss = np.zeros(3, dtype=float)
@@ -75,7 +75,7 @@ class AttnGAN:
             uncond_fake_acc = np.zeros(3, dtype=float)
             disc_skips = np.zeros(3, dtype=int)
 
-            train_pbar = tqdm(train_loader, desc='Training', leave=False)
+            train_pbar = tqdm(train_loader, desc='Training', leave=False, dynamic_ncols=True)
             for batch in train_pbar:
                 self.gen.zero_grad(), self.disc.zero_grad()
                 real_imgs = [batch['img64'], batch['img128'], batch['img256']]

@@ -34,8 +34,8 @@ def get_class_masks(cls_labels):
 class DAMSM:
     def __init__(self, vocab_size, device=DEVICE):
         self.device = device
-        self.img_enc = ImageEncoder().to(device)
-        self.txt_enc = TextEncoder(vocab_size=vocab_size).to(device)
+        self.img_enc = ImageEncoder(device=self.device)
+        self.txt_enc = TextEncoder(vocab_size=vocab_size, device=self.device)
 
     def train(self, dataset, epoch, batch_size=BATCH, patience=20):
         loader_config = {
@@ -60,12 +60,12 @@ class DAMSM:
         patience_step = 0
         min_test_loss = float('Inf')
         min_test_loss_epoch = 0
-        for e in tqdm(range(epoch), desc='Epochs', leave=True):
+        for e in tqdm(range(epoch), desc='Epochs', leave=True, dynamic_ncols=True):
             self.img_enc.train(), self.txt_enc.train()
             avg_train_loss = 0
             avg_test_loss = 0
 
-            train_pbar = tqdm(train_loader, leave=False, desc='Training')
+            train_pbar = tqdm(train_loader, leave=False, desc='Training', dynamic_ncols=True)
             for step, batch in enumerate(train_pbar):
                 self.img_enc.zero_grad(), self.txt_enc.zero_grad()
 
@@ -84,7 +84,7 @@ class DAMSM:
 
             self.img_enc.eval(), self.txt_enc.eval()
             with torch.no_grad():
-                for i, b in enumerate(tqdm(test_loader, leave=True, desc='Evaluating test set')):
+                for i, b in enumerate(tqdm(test_loader, leave=True, desc='Evaluating test set', dynamic_ncols=True)):
                     loss = self.batch_loss(b, img_cap_pair_labels)[0]
                     avg_test_loss += loss
 
