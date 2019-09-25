@@ -34,8 +34,8 @@ def get_class_masks(cls_labels):
 class DAMSM:
     def __init__(self, vocab_size, device=DEVICE):
         self.device = device
-        self.img_enc = ImageEncoder().to(device)
-        self.txt_enc = TextEncoder(vocab_size=vocab_size).to(device)
+        self.img_enc = ImageEncoder(device=self.device)
+        self.txt_enc = TextEncoder(vocab_size=vocab_size, device=self.device)
 
     def train(self, dataset, epoch, batch_size=BATCH, patience=20):
         loader_config = {

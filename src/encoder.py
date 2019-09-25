@@ -9,9 +9,10 @@ from src.util import conv1x1, count_params
 
 
 class TextEncoder(nn.Module):
-    def __init__(self, vocab_size):
+    def __init__(self, vocab_size, device=DEVICE):
         super().__init__()
         self.vocab_size = vocab_size
+        self.device = device
         self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=D_WORD)
         self.emb_dropout = nn.Dropout(P_DROP)
         with warnings.catch_warnings():
@@ -23,8 +24,8 @@ class TextEncoder(nn.Module):
                 dropout=P_DROP,
                 bidirectional=True)
         # Initial cell and hidden state for each sequence
-        self.hidden0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(DEVICE)
-        self.cell0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(DEVICE)
+        self.hidden0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(self.device)
+        self.cell0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(self.device)
         # Different initial hidden state for different directions?
 
         p_trainable, p_non_trainable = count_params(self)
@@ -35,7 +36,7 @@ class TextEncoder(nn.Module):
         init_hidden = self.hidden0.repeat(2, batch_size, 1)
         init_cell = self.cell0.repeat(2, batch_size, 1)
 
-        e = self.embed(torch.tensor(x, dtype=torch.int64).to(DEVICE))
+        e = self.embed(torch.tensor(x, dtype=torch.int64).to(self.device))
         e = self.emb_dropout(e)
         word_embs, hidden = self.rnn(e, (init_hidden, init_cell))
         word_embs = word_embs.transpose(1, 2)  # -> BATCH x D_HIDDEN x seq_len
@@ -45,8 +46,9 @@ class TextEncoder(nn.Module):
 
 
 class ImageEncoder(nn.Module):
-    def __init__(self):
+    def __init__(self, device=DEVICE):
         super().__init__()
+        self.device = device
         self.inception_model = torchvision.models.inception_v3(pretrained=True)
         # Freeze Inception V3 parameters
         for param in self.inception_model.parameters():
@@ -64,7 +66,7 @@ class ImageEncoder(nn.Module):
 
     def forward(self, x):
         # --> fixed-size input: batch x 3 x 299 x 299
-        x = nn.functional.interpolate(input=x, size=(299, 299), mode='bilinear', align_corners=False).to(DEVICE)
+        x = nn.functional.interpolate(input=x, size=(299, 299), mode='bilinear', align_corners=False).to(self.device)
         # x = nn.Upsample(size=(299, 299), mode='bilinear')(x)
         # 299 x 299 x 3
         x = self.inception_model.Conv2d_1a_3x3(x)
