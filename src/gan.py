@@ -257,11 +257,12 @@ class AttnGAN:
             uncond_fake_accuracy[i] = (uncond_fake_logits >= 0).sum().item() / batch_size
 
             error = ((real_error + uncond_real_error) / 2 + fake_error + uncond_fake_error + mismatched_error) / 3
-            # if fake_accuracy[i] < skip_acc_threshold or real_accuracy[i] < 1 - skip_acc_threshold:
-            error.backward()
-            self.disc_optimizers[i].step()
-            # else:
-            #     skipped[i] = 1
+
+            if fake_accuracy[i] + real_accuracy[i] < skip_acc_threshold * 2:
+                error.backward()
+                self.disc_optimizers[i].step()
+            else:
+                skipped[i] = 1
             avg_d_loss[i] = error.item() / batch_size
 
         return avg_d_loss, real_accuracy, fake_accuracy, mismatched_accuracy, uncond_real_accuracy, uncond_fake_accuracy, skipped
