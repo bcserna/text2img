@@ -7,6 +7,7 @@ import numpy as np
 import time
 import os
 from tqdm import tqdm
+from copy import deepcopy
 
 from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA, MODEL_DIR
 from src.discriminator import Discriminator
@@ -33,9 +34,12 @@ class AttnGAN:
                                                  betas=(0.5, 0.999))
                                 for d in self.discriminators]
 
-    def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=3, nb_test_samples=2):
+    def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=3, nb_test_samples=2, hist_avg=True):
         start_time = time.strftime("%Y-%m-%d-%H-%M", time.gmtime())
         os.makedirs(start_time)
+
+        if hist_avg:
+            avg_g_params = deepcopy(list(p.data for p in self.gen.parameters()))
 
         loader_config = {
             'batch_size': batch_size,
@@ -65,6 +69,7 @@ class AttnGAN:
         match_labels = nn.Parameter(torch.LongTensor(range(batch_size)), requires_grad=False).to(self.device)
 
         noise = torch.FloatTensor(batch_size, D_Z).to(self.device)
+        gen_updates = 0
         for e in tqdm(range(epoch), desc='Epochs', dynamic_ncols=True):
             self.gen.train(), self.disc.train()
             g_loss = 0
@@ -104,8 +109,19 @@ class AttnGAN:
                 # Generator loss
                 g_total = self.generator_step(generated, word_embs, sent_embs, mu, logvar, real_labels, batch['label'],
                                               match_labels)
+                gen_updates += 1
+
                 avg_g_loss = g_total.item() / batch_size
                 g_loss += avg_g_loss
+
+                if hist_avg:
+                    for p, avg_p in zip(self.gen.parameters(), avg_g_params):
+                        avg_p.mul_(0.999).add_(0.001, p.data)
+
+                if gen_updates % 1000 == 0:
+                    tqdm.write('Replacing generator weights with their moving average')
+                    for p, avg_p in zip(self.gen.parameters(), avg_g_params):
+                        p.data.copy_(avg_p)
 
                 train_pbar.set_description(f'Training (G: {avg_g_loss:05.4f}  '
                                            f'D64: {batch_d_loss[0]:05.4f}  '
