@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
 import numpy as np
@@ -180,10 +181,10 @@ class AttnGAN:
         for i, d in enumerate(self.discriminators):
             features = d(generated_imgs[i])
             fake_logits = d.logit(features, sent_embs)
-            disc_error = nn.functional.binary_cross_entropy_with_logits(fake_logits, real_labels)
+            disc_error = F.binary_cross_entropy_with_logits(fake_logits, real_labels)
 
             uncond_fake_logits = d.logit(features)
-            uncond_disc_error = nn.functional.binary_cross_entropy_with_logits(uncond_fake_logits, real_labels)
+            uncond_disc_error = F.binary_cross_entropy_with_logits(uncond_fake_logits, real_labels)
 
             g_loss += disc_error + uncond_disc_error
 
@@ -217,31 +218,26 @@ class AttnGAN:
             fake_features = d(generated_imgs[i].detach())
 
             real_logits = d.logit(real_features, sent_embs)
-            # real_error = nn.functional.binary_cross_entropy(real_logits, real_labels)
-            real_error = nn.functional.binary_cross_entropy_with_logits(real_logits, smooth_real_labels)
+            real_error = F.binary_cross_entropy_with_logits(real_logits, smooth_real_labels)
             # Real images should be classified as real
             real_accuracy[i] = (real_logits < 0).sum().item() / batch_size
 
             fake_logits = d.logit(fake_features, sent_embs)
-            # fake_error = nn.functional.binary_cross_entropy(fake_logits, fake_labels)
-            fake_error = nn.functional.binary_cross_entropy_with_logits(fake_logits, smooth_fake_labels)
+            fake_error = F.binary_cross_entropy_with_logits(fake_logits, smooth_fake_labels)
             # Generated images should be classified as fake
             fake_accuracy[i] = (fake_logits >= 0).sum().item() / batch_size
 
             mismatched_logits = d.logit(real_features, rotate_tensor(sent_embs, 1))
-            # mismatched_error = nn.functional.binary_cross_entropy(mismatched_logits, fake_labels)
-            mismatched_error = nn.functional.binary_cross_entropy_with_logits(mismatched_logits, smooth_fake_labels)
+            mismatched_error = F.binary_cross_entropy_with_logits(mismatched_logits, smooth_fake_labels)
             # Images with mismatched descriptions should be classified as fake
             mismatched_accuracy[i] = (mismatched_logits >= 0).sum().item() / batch_size
 
             uncond_real_logits = d.logit(real_features)
-            # uncond_real_error = nn.functional.binary_cross_entropy(uncond_real_logits, real_labels)
-            uncond_real_error = nn.functional.binary_cross_entropy_with_logits(uncond_real_logits, smooth_real_labels)
+            uncond_real_error = F.binary_cross_entropy_with_logits(uncond_real_logits, smooth_real_labels)
             uncond_real_accuracy[i] = (uncond_real_logits < 0).sum().item() / batch_size
 
             uncond_fake_logits = d.logit(fake_features)
-            # uncond_fake_error = nn.functional.binary_cross_entropy(uncond_fake_logits, fake_labels)
-            uncond_fake_error = nn.functional.binary_cross_entropy_with_logits(uncond_fake_logits, smooth_fake_labels)
+            uncond_fake_error = F.binary_cross_entropy_with_logits(uncond_fake_logits, smooth_fake_labels)
             uncond_fake_accuracy[i] = (uncond_fake_logits >= 0).sum().item() / batch_size
 
             error = ((real_error + uncond_real_error) / 2 + fake_error + uncond_fake_error + mismatched_error) / 3

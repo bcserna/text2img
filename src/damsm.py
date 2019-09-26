@@ -2,6 +2,7 @@ import json
 
 import torch
 from torch import nn
+import torch.nn.functional as F
 import numpy as np
 import os
 
@@ -167,8 +168,8 @@ class DAMSM:
         scores2 = scores1.transpose(0, 1)
 
         # nn.CrossEntropyLoss has builtin softmax
-        loss1 = nn.CrossEntropyLoss()(scores1, img_cap_pair_label)
-        loss2 = nn.CrossEntropyLoss()(scores2, img_cap_pair_label)
+        loss1 = F.cross_entropy(scores1, img_cap_pair_label)
+        loss2 = F.cross_entropy(scores2, img_cap_pair_label)
 
         return loss1, loss2
 
