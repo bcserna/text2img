@@ -13,8 +13,8 @@ class TextEncoder(nn.Module):
         super().__init__()
         self.vocab_size = vocab_size
         self.device = device
-        self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=D_WORD)
-        self.emb_dropout = nn.Dropout(P_DROP)
+        self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=D_WORD).to(self.device)
+        self.emb_dropout = nn.Dropout(P_DROP).to(self.device)
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             self.rnn = nn.LSTM(
@@ -22,7 +22,7 @@ class TextEncoder(nn.Module):
                 hidden_size=D_HIDDEN // 2,  # bidirectional
                 batch_first=True,
                 dropout=P_DROP,
-                bidirectional=True)
+                bidirectional=True).to(self.device)
         # Initial cell and hidden state for each sequence
         self.hidden0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(self.device)
         self.cell0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(self.device)
