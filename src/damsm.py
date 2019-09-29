@@ -28,7 +28,7 @@ def get_class_masks(cls_labels):
         mask = cls_labels == l
         mask[i] = 0
         masks.append(mask)
-    masks = torch.ByteTensor(masks)
+    masks = torch.BoolTensor(masks)
     return masks
 
 
