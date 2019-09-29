@@ -16,9 +16,9 @@ from src.util import rotate_tensor, init_weights, inception_score
 
 
 class AttnGAN:
-    def __init__(self, damsm, device=DEVICE):
-        self.gen = Generator().to(device)
-        self.disc = Discriminator().to(device)
+    def __init__(self, damsm, generator, discriminator, device=DEVICE):
+        self.gen = generator.to(device)
+        self.disc = discriminator.to(device)
         self.damsm = damsm
         self.damsm.txt_enc.eval(), self.damsm.img_enc.eval()
         self.device = device
