@@ -12,6 +12,6 @@ def train_gan(epochs, device=DEVICE):
     generator = Generator()
     # discriminator = Discriminator()
     discriminator = PatchDiscriminator()
-    gan = AttnGAN(generator, discriminator, device)
+    gan = AttnGAN(damsm, generator, discriminator, device)
     metrics = gan.train(cub, epochs)
     return metrics
