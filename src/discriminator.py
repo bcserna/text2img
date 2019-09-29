@@ -136,3 +136,24 @@ class Discriminator(nn.Module):
         l128 = self.d128.logit(x[1], condition)
         l256 = self.d256.logit(x[2], condition)
         return l64, l128, l256
+
+
+class PatchDiscriminator(nn.Module):
+    def __init__(self, device=DEVICE):
+        super().__init__()
+        self.d64 = Discriminator64().to(device)
+        self.d128 = Discriminator64().to(device)
+        self.d256 = Discriminator64().to(device)
+        self.device = device
+
+    def forward(self, x):
+        o64 = self.d64(x[0].to(self.device))
+        o128 = self.d128(x[1].to(self.device))
+        o256 = self.d256(x[2].to(self.device))
+        return o64, o128, o256
+
+    def get_logits(self, x, condition):
+        l64 = self.d64.logit(x[0], condition)
+        l128 = self.d128.logit(x[1], condition)
+        l256 = self.d256.logit(x[2], condition)
+        return l64, l128, l256
