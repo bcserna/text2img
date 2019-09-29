@@ -28,7 +28,7 @@ def get_class_masks(cls_labels):
         mask = cls_labels == l
         mask[i] = 0
         masks.append(mask)
-    masks = torch.BoolTensor(masks).to(DEVICE)
+    masks = torch.ByteTensor(masks)
     return masks
 
 
@@ -37,6 +37,12 @@ class DAMSM:
         self.device = device
         self.img_enc = ImageEncoder(device=self.device)
         self.txt_enc = TextEncoder(vocab_size=vocab_size, device=self.device)
+
+    def to(self, device):
+        self.device = device
+        self.img_enc.to(self.device)
+        self.txt_enc.to(self.device)
+        return self
 
     def train(self, dataset, epoch, batch_size=BATCH, patience=20):
         loader_config = {
@@ -150,11 +156,10 @@ class DAMSM:
         self.img_enc.load_state_dict(torch.load(f'{load_dir}/{name}_img_enc.pt'))
         self.txt_enc.eval(), self.img_enc.eval()
 
-    @staticmethod
-    def sentence_loss(img_code, sent_code, cls_labels, img_cap_pair_label, eps=1e-8):
+    def sentence_loss(self, img_code, sent_code, cls_labels, img_cap_pair_label, eps=1e-8):
         # in: img_code, sent_code -> BATCH x D_HIDDEN
         # mask samples belonging to the same class
-        masks = get_class_masks(cls_labels)
+        masks = get_class_masks(cls_labels).to(self.device)
 
         # -> BATCH x 1
         img_norm = img_code.norm(p=2, dim=1, keepdim=True)
@@ -173,8 +178,7 @@ class DAMSM:
 
         return loss1, loss2
 
-    @staticmethod
-    def words_loss(img_features, word_embs, cls_labels, img_cap_pair_label):
+    def words_loss(self, img_features, word_embs, cls_labels, img_cap_pair_label):
         # img_features (local features of the image): BATCH x D_HIDDEN x 17 x 17
         # word_embs: BATCH x D_HIDDEN x CAP_LEN
 
@@ -203,7 +207,7 @@ class DAMSM:
             similarities.append(sim)
 
         similarities = torch.cat(similarities, 1)  # -> BATCH x BATCH
-        masks = masks.view(batch_size, batch_size).contiguous().to(DEVICE)
+        masks = masks.view(batch_size, batch_size).contiguous().to(self.device)
 
         similarities = similarities * GAMMA_3
         similarities.data.masked_fill_(masks, -float('inf'))

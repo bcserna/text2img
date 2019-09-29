@@ -74,15 +74,21 @@ class ImageGen(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self):
+    def __init__(self, device=DEVICE):
         super().__init__()
-        self.cond_aug = CondAug()
-        self.f0 = Generator0()
-        self.f1 = GeneratorN()
-        self.f2 = GeneratorN()
-        self.img0 = ImageGen()
-        self.img1 = ImageGen()
-        self.img2 = ImageGen()
+        self.device = device
+        self.cond_aug = CondAug(self.device)
+        self.f0 = Generator0().to(self.device)
+        self.f1 = GeneratorN().to(self.device)
+        self.f2 = GeneratorN().to(self.device)
+        self.img0 = ImageGen().to(self.device)
+        self.img1 = ImageGen().to(self.device)
+        self.img2 = ImageGen().to(self.device)
+
+    def to(self, device):
+        self.device = device
+        super().to(self.device)
+        return self
 
     def forward(self, z_code, sent_emb, word_embs, mask):
         generated = []
@@ -108,7 +114,12 @@ class CondAug(nn.Module):
     def __init__(self, device=DEVICE):
         super().__init__()
         self.device = device
-        self.fc = nn.Linear(D_HIDDEN, D_COND * 4, bias=True).to(device)
+        self.fc = nn.Linear(D_HIDDEN, D_COND * 4, bias=True).to(self.device)
+
+    def to(self, device):
+        self.device = device
+        super().to(device)
+        return self
 
     def encode(self, text_emb):
         x = F.glu(self.fc(text_emb))

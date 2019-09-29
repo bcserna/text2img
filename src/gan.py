@@ -19,7 +19,7 @@ class AttnGAN:
     def __init__(self, damsm, generator, discriminator, device=DEVICE):
         self.gen = generator.to(device)
         self.disc = discriminator.to(device)
-        self.damsm = damsm
+        self.damsm = damsm.to(device)
         self.damsm.txt_enc.eval(), self.damsm.img_enc.eval()
         self.device = device
         self.gen.apply(init_weights), self.disc.apply(init_weights)
@@ -64,9 +64,9 @@ class AttnGAN:
             }
         }
 
-        real_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(0), requires_grad=False).to(self.device)
-        fake_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(1), requires_grad=False).to(self.device)
-        match_labels = nn.Parameter(torch.LongTensor(range(batch_size)), requires_grad=False).to(self.device)
+        # real_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(0), requires_grad=False).to(self.device)
+        # fake_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(1), requires_grad=False).to(self.device)
+        # match_labels = nn.Parameter(torch.LongTensor(range(batch_size)), requires_grad=False).to(self.device)
 
         noise = torch.FloatTensor(batch_size, D_Z).to(self.device)
         gen_updates = 0
@@ -96,7 +96,7 @@ class AttnGAN:
 
                 # Discriminator loss (with label smoothing)
                 batch_d_loss, batch_real_acc, batch_fake_acc, batch_mismatched_acc, batch_uncond_real_acc, batch_uncond_fake_acc, batch_disc_skips = self.discriminator_step(
-                    real_imgs, generated, sent_embs, real_labels, fake_labels, 0.1, 0)
+                    real_imgs, generated, sent_embs, 0.1)
 
                 d_loss += batch_d_loss
                 real_acc += batch_real_acc
@@ -107,8 +107,7 @@ class AttnGAN:
                 disc_skips += batch_disc_skips
 
                 # Generator loss
-                g_total = self.generator_step(generated, word_embs, sent_embs, mu, logvar, real_labels, batch['label'],
-                                              match_labels)
+                g_total = self.generator_step(generated, word_embs, sent_embs, mu, logvar, batch['label'])
                 gen_updates += 1
 
                 avg_g_loss = g_total.item() / batch_size
@@ -181,8 +180,10 @@ class AttnGAN:
         loss = torch.mean(loss).mul_(-0.5)
         return loss
 
-    def generator_step(self, generated_imgs, word_embs, sent_embs, mu, logvar, real_labels, class_labels, match_labels):
+    def generator_step(self, generated_imgs, word_embs, sent_embs, mu, logvar, class_labels):
         local_features, global_features = self.damsm.img_enc(generated_imgs[-1])
+        batch_size = sent_embs.size(0)
+        match_labels = torch.LongTensor(range(batch_size)).requires_grad_(False).to(self.device)
 
         w1_loss, w2_loss, _ = self.damsm.words_loss(local_features, word_embs, class_labels, match_labels)
         w_loss = (w1_loss + w2_loss) * LAMBDA
@@ -197,6 +198,9 @@ class AttnGAN:
         for i, d in enumerate(self.discriminators):
             features = d(generated_imgs[i])
             fake_logits = d.logit(features, sent_embs)
+
+            real_labels = torch.Tensor(fake_logits.size()).fill_(1).requires_grad_(False).to(self.device)
+
             disc_error = F.binary_cross_entropy_with_logits(fake_logits, real_labels)
 
             uncond_fake_logits = d.logit(features)
@@ -209,17 +213,9 @@ class AttnGAN:
 
         return g_loss
 
-    def discriminator_step(self, real_imgs, generated_imgs, sent_embs, real_labels, fake_labels,
-                           real_smoothing, fake_smoothing, skip_acc_threshold=0.9):
-        batch_size = real_labels.size(0)
-
-        smooth_real_labels = real_labels + real_smoothing
-        smooth_fake_labels = fake_labels + fake_smoothing
-        # Add label noise
-        p_flip = 0.05
-        flip_mask = torch.zeros(batch_size).bernoulli_(p_flip).type(torch.bool)
-        smooth_real_labels[flip_mask], smooth_fake_labels[flip_mask] = smooth_fake_labels[flip_mask], \
-                                                                       smooth_real_labels[flip_mask]
+    def discriminator_step(self, real_imgs, generated_imgs, sent_embs, label_smoothing, skip_acc_threshold=0.9,
+                           p_flip=0.05):
+        batch_size = sent_embs.size(0)
 
         avg_d_loss = [0, 0, 0]
         real_accuracy = [0, 0, 0]
@@ -234,26 +230,36 @@ class AttnGAN:
             fake_features = d(generated_imgs[i].detach())
 
             real_logits = d.logit(real_features, sent_embs)
-            real_error = F.binary_cross_entropy_with_logits(real_logits, smooth_real_labels)
+
+            real_labels = torch.Tensor(real_logits.size()).fill_(1).requires_grad_(False).to(self.device)
+            fake_labels = torch.Tensor(real_logits.size()).fill_(0).requires_grad_(False).to(self.device)
+
+            real_labels = real_labels - label_smoothing
+            fake_labels = fake_labels + label_smoothing
+
+            flip_mask = torch.Tensor(real_labels.size()).bernoulli_(p_flip).type(torch.bool)
+            real_labels[flip_mask], fake_labels[flip_mask] = fake_labels[flip_mask], real_labels[flip_mask]
+
+            real_error = F.binary_cross_entropy_with_logits(real_logits, real_labels)
             # Real images should be classified as real
             real_accuracy[i] = (real_logits < 0).sum().item() / batch_size
 
             fake_logits = d.logit(fake_features, sent_embs)
-            fake_error = F.binary_cross_entropy_with_logits(fake_logits, smooth_fake_labels)
+            fake_error = F.binary_cross_entropy_with_logits(fake_logits, fake_labels)
             # Generated images should be classified as fake
             fake_accuracy[i] = (fake_logits >= 0).sum().item() / batch_size
 
             mismatched_logits = d.logit(real_features, rotate_tensor(sent_embs, 1))
-            mismatched_error = F.binary_cross_entropy_with_logits(mismatched_logits, smooth_fake_labels)
+            mismatched_error = F.binary_cross_entropy_with_logits(mismatched_logits, fake_labels)
             # Images with mismatched descriptions should be classified as fake
             mismatched_accuracy[i] = (mismatched_logits >= 0).sum().item() / batch_size
 
             uncond_real_logits = d.logit(real_features)
-            uncond_real_error = F.binary_cross_entropy_with_logits(uncond_real_logits, smooth_real_labels)
+            uncond_real_error = F.binary_cross_entropy_with_logits(uncond_real_logits, real_labels)
             uncond_real_accuracy[i] = (uncond_real_logits < 0).sum().item() / batch_size
 
             uncond_fake_logits = d.logit(fake_features)
-            uncond_fake_error = F.binary_cross_entropy_with_logits(uncond_fake_logits, smooth_fake_labels)
+            uncond_fake_error = F.binary_cross_entropy_with_logits(uncond_fake_logits, fake_labels)
             uncond_fake_accuracy[i] = (uncond_fake_logits >= 0).sum().item() / batch_size
 
             error = ((real_error + uncond_real_error) / 2 + fake_error + uncond_fake_error + mismatched_error) / 3

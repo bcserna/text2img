@@ -43,32 +43,32 @@ def conv3x3_LReLU(in_channels, out_channels):
 
 
 class DiscriminatorLogitBlock(nn.Module):
-    def __init__(self):
+    def __init__(self, logit_kernel, logit_stride):
         super().__init__()
         self.jointConv = conv3x3_LReLU(D_DF * 8 + D_HIDDEN, D_DF * 8)
         self.logits = nn.Sequential(
-            nn.Conv2d(D_DF * 8, 1, kernel_size=4, stride=4),
+            nn.Conv2d(D_DF * 8, 1, kernel_size=logit_kernel, stride=logit_stride),
             # nn.Sigmoid()
         )
 
     def forward(self, h, condition=None):
         if condition is not None:
             condition = condition.view(-1, D_HIDDEN, 1, 1)
-            condition = condition.repeat(1, 1, 4, 4)
-            conditioned_h = torch.cat((h, condition), 1)  # (D_DF + D_HIDDEN) x 4 x 4
+            condition = condition.repeat(1, 1, h.size(-2), h.size(-1))
+            conditioned_h = torch.cat((h, condition), 1)
             conditioned_h = self.jointConv(conditioned_h)
         else:
             conditioned_h = h
 
         logits = self.logits(conditioned_h)
-        return logits.view(-1)
+        return logits
 
 
 class Discriminator64(nn.Module):
     def __init__(self):
         super().__init__()
         self.encoder = downscale16_encoder_block()
-        self.logit = DiscriminatorLogitBlock()
+        self.logit = DiscriminatorLogitBlock(4, 4)
 
         p_trainable, p_non_trainable = count_params(self)
         print(f'Discriminator64 params: trainable {p_trainable} - non_trainable {p_non_trainable}')
@@ -83,7 +83,7 @@ class Discriminator128(nn.Module):
         self.downscale_encoder_16 = downscale16_encoder_block()
         self.downscale_encoder_32 = downscale2_encoder_block(D_DF * 8, D_DF * 16)
         self.encoder32 = conv3x3_LReLU(D_DF * 16, D_DF * 8)
-        self.logit = DiscriminatorLogitBlock()
+        self.logit = DiscriminatorLogitBlock(4, 4)
 
         p_trainable, p_non_trainable = count_params(self)
         print(f'Discriminator128 params: trainable {p_trainable} - non_trainable {p_non_trainable}')
@@ -103,7 +103,7 @@ class Discriminator256(nn.Module):
         self.downscale_encoder_64 = downscale2_encoder_block(D_DF * 16, D_DF * 32)
         self.encoder64 = conv3x3_LReLU(D_DF * 32, D_DF * 16)
         self.encoder64_2 = conv3x3_LReLU(D_DF * 16, D_DF * 8)
-        self.logit = DiscriminatorLogitBlock()
+        self.logit = DiscriminatorLogitBlock(4, 4)
 
         p_trainable, p_non_trainable = count_params(self)
         print(f'Discriminator256 params: trainable {p_trainable} - non_trainable {p_non_trainable}')
@@ -120,10 +120,15 @@ class Discriminator256(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self, device=DEVICE):
         super().__init__()
-        self.d64 = Discriminator64().to(device)
-        self.d128 = Discriminator128().to(device)
-        self.d256 = Discriminator256().to(device)
         self.device = device
+        self.d64 = Discriminator64().to(self.device)
+        self.d128 = Discriminator128().to(self.device)
+        self.d256 = Discriminator256().to(self.device)
+
+    def to(self, device):
+        self.device = device
+        super().to(device)
+        return self
 
     def forward(self, x):
         o64 = self.d64(x[0].to(self.device))
@@ -136,15 +141,28 @@ class Discriminator(nn.Module):
         l128 = self.d128.logit(x[1], condition)
         l256 = self.d256.logit(x[2], condition)
         return l64, l128, l256
+
+
+class PatchDiscriminatorN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.encoder = downscale16_encoder_block()
+        self.logit = DiscriminatorLogitBlock(4, 2)
+
+        p_trainable, p_non_trainable = count_params(self)
+        print(f'Patch discriminator params: trainable {p_trainable} - non_trainable {p_non_trainable}')
+
+    def forward(self, x):
+        return self.encoder(x)
 
 
 class PatchDiscriminator(nn.Module):
     def __init__(self, device=DEVICE):
         super().__init__()
-        self.d64 = Discriminator64().to(device)
-        self.d128 = Discriminator64().to(device)
-        self.d256 = Discriminator64().to(device)
         self.device = device
+        self.d64 = PatchDiscriminatorN().to(self.device)
+        self.d128 = PatchDiscriminatorN().to(self.device)
+        self.d256 = PatchDiscriminatorN().to(self.device)
 
     def forward(self, x):
         o64 = self.d64(x[0].to(self.device))
@@ -157,3 +175,8 @@ class PatchDiscriminator(nn.Module):
         l128 = self.d128.logit(x[1], condition)
         l256 = self.d256.logit(x[2], condition)
         return l64, l128, l256
+
+    def to(self, device):
+        self.device = device
+        super().to(device)
+        return self

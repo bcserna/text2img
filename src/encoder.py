@@ -51,7 +51,8 @@ class ImageEncoder(nn.Module):
         self.device = device
         self.inception_model = torchvision.models.inception_v3(pretrained=True).to(self.device)
         # Freeze Inception V3 parameters
-        self.inception_model.requires_grad_(False).to(self.device)
+        for param in self.inception_model.parameters():
+            param.requires_grad = False
         # 768: the dimension of mixed_6e layer's sub-regions (768 x 289 [number of sub-regions, 17 x 17])
         self.local_proj = conv1x1(768, D_HIDDEN).to(self.device)
         # 2048: the dimension of last average pool's output
