@@ -242,25 +242,25 @@ class AttnGAN:
 
             real_error = F.binary_cross_entropy_with_logits(real_logits, real_labels)
             # Real images should be classified as real
-            real_accuracy[i] = (real_logits < 0).sum().item() / real_logits.numel()
+            real_accuracy[i] = (real_logits >= 0).sum().item() / real_logits.numel()
 
             fake_logits = d.logit(fake_features, sent_embs)
             fake_error = F.binary_cross_entropy_with_logits(fake_logits, fake_labels)
             # Generated images should be classified as fake
-            fake_accuracy[i] = (fake_logits >= 0).sum().item() / fake_logits.numel()
+            fake_accuracy[i] = (fake_logits < 0).sum().item() / fake_logits.numel()
 
             mismatched_logits = d.logit(real_features, rotate_tensor(sent_embs, 1))
             mismatched_error = F.binary_cross_entropy_with_logits(mismatched_logits, fake_labels)
             # Images with mismatched descriptions should be classified as fake
-            mismatched_accuracy[i] = (mismatched_logits >= 0).sum().item() / mismatched_logits.numel()
+            mismatched_accuracy[i] = (mismatched_logits < 0).sum().item() / mismatched_logits.numel()
 
             uncond_real_logits = d.logit(real_features)
             uncond_real_error = F.binary_cross_entropy_with_logits(uncond_real_logits, real_labels)
-            uncond_real_accuracy[i] = (uncond_real_logits < 0).sum().item() / uncond_real_logits.numel()
+            uncond_real_accuracy[i] = (uncond_real_logits >= 0).sum().item() / uncond_real_logits.numel()
 
             uncond_fake_logits = d.logit(fake_features)
             uncond_fake_error = F.binary_cross_entropy_with_logits(uncond_fake_logits, fake_labels)
-            uncond_fake_accuracy[i] = (uncond_fake_logits >= 0).sum().item() / uncond_fake_logits.numel()
+            uncond_fake_accuracy[i] = (uncond_fake_logits < 0).sum().item() / uncond_fake_logits.numel()
 
             error = ((real_error + uncond_real_error) / 2 + fake_error + uncond_fake_error + mismatched_error) / 3
 
