@@ -10,55 +10,6 @@ from tqdm import tqdm
 from src.config import GAN_BATCH, DEVICE, D_Z, END_TOKEN
 
 
-def inception_score(gan, dataset, inception_model, batch_size=GAN_BATCH, samples=50000, splits=10, device=DEVICE):
-    training = gan.gen.training
-    with torch.no_grad():
-        gan.gen.eval()
-        inception_preds = np.zeros((samples, 1000))
-
-        loader = DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=True,
-                            collate_fn=dataset.collate_fn)
-
-        epochs = math.ceil(samples / (len(loader) * batch_size))
-        nb_generated = 0
-        for _ in tqdm(range(epochs), desc='Generating samples for inception score', dynamic_ncols=True):
-            for batch in loader:
-                word_embs, sent_embs = gan.damsm.txt_enc(batch['caption'])
-                attn_mask = torch.tensor(batch['caption']).to(device) == dataset.vocab[END_TOKEN]
-
-                # Generate images
-                noise = torch.FloatTensor(batch_size, D_Z).to(device)
-                noise.data.normal_(0, 1)
-                generated, att, mu, logvar = gan.gen(noise, sent_embs, word_embs, attn_mask)
-                x = generated[-1]
-                x = F.interpolate(x, size=(299, 299), mode='bilinear', align_corners=False)
-                x = inception_model(x)
-                x = F.softmax(x, dim=-1).data.cpu().numpy()
-
-                samples_left = samples - nb_generated
-                if samples_left < batch_size:
-                    inception_preds[nb_generated:] = x[:samples_left]
-                    break
-                else:
-                    inception_preds[nb_generated:nb_generated + batch_size] = x
-                    nb_generated += batch_size
-
-        scores = []
-        split_size = samples // splits
-        for s in range(splits):
-            split_scores = []
-
-            split = inception_preds[s * split_size: (s + 1) * split_size]
-            p_y = np.mean(split, axis=0)
-            for sample_pred in split:
-                split_scores.append(entropy(sample_pred, p_y))
-
-            scores.append(np.exp(np.mean(split_scores)))
-
-        gan.gen.train(mode=training)
-        return np.mean(scores), np.std(scores)
-
-
 def init_weights(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:

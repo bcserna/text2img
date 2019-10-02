@@ -10,9 +10,8 @@ from tqdm import tqdm
 from copy import deepcopy
 
 from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA, MODEL_DIR
-from src.discriminator import Discriminator
-from src.generator import Generator
-from src.util import rotate_tensor, init_weights, inception_score
+from src.util import rotate_tensor, init_weights
+from src.evaluation import inception_score
 
 
 class AttnGAN:
