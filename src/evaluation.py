@@ -49,6 +49,7 @@ def frechet_inception_distance(inception_model, real_imgs, fake_imgs):
 
 
 def embed_captions(captions, encoder, dataset, device=DEVICE):
+    encoder.eval()
     word_embs, sent_embs = encoder(captions)
     attn_mask = torch.tensor(captions).to(device) == dataset.vocab[END_TOKEN]
     return word_embs, sent_embs, attn_mask
@@ -56,7 +57,7 @@ def embed_captions(captions, encoder, dataset, device=DEVICE):
 
 def generate_test_samples(model, dataset, n_samples, batch_size=GAN_BATCH, device=DEVICE):
     with torch.no_grad():
-        model.eval()
+        model.gen.eval()
         loader = cycle(DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=False,
                                   collate_fn=dataset.collate_fn))
         generated_samples = np.zeros((n_samples, 3, 256, 256))
