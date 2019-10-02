@@ -55,28 +55,30 @@ def embed_captions(captions, encoder, dataset, device=DEVICE):
 
 
 def generate_test_samples(model, dataset, n_samples, batch_size=GAN_BATCH, device=DEVICE):
-    loader = cycle(DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=False,
-                              collate_fn=dataset.collate_fn))
-    generated_samples = np.zeros((n_samples, 3, 256, 256))
-    nb_generated = 0
-    pbar = tqdm(loader, desc='Generating samples', dynamic_ncols=True, total=n_samples)
-    for batch in pbar:
-        word_embs, sent_embs, attn_mask = embed_captions(batch['caption'], model.damsm.txt_enc, dataset, device)
+    with torch.no_grad():
+        model.eval()
+        loader = cycle(DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=False,
+                                  collate_fn=dataset.collate_fn))
+        generated_samples = np.zeros((n_samples, 3, 256, 256))
+        nb_generated = 0
+        pbar = tqdm(loader, desc='Generating samples', dynamic_ncols=True, total=n_samples)
+        for batch in pbar:
+            word_embs, sent_embs, attn_mask = embed_captions(batch['caption'], model.damsm.txt_enc, dataset, device)
 
-        # Generate images
-        noise = torch.FloatTensor(batch_size, D_Z).to(device)
-        noise.data.normal_(0, 1)
-        generated, att, mu, logvar = model.gen(noise, sent_embs, word_embs, attn_mask)
-        generated = generated[-1]
-        l = len(batch)
-        if nb_generated + l < n_samples:
-            generated_samples[nb_generated:nb_generated + l] = generated
-            nb_generated += l
-            pbar.update(l)
-        else:
-            generated_samples[nb_generated:] = generated[:n_samples - nb_generated]
-            pbar.update(n_samples - nb_generated)
-            break
+            # Generate images
+            noise = torch.FloatTensor(batch_size, D_Z).to(device)
+            noise.data.normal_(0, 1)
+            generated, att, mu, logvar = model.gen(noise, sent_embs, word_embs, attn_mask)
+            generated = generated[-1].cpu().numpy()
+            l = len(batch)
+            if nb_generated + l < n_samples:
+                generated_samples[nb_generated:nb_generated + l] = generated
+                nb_generated += l
+                pbar.update(l)
+            else:
+                generated_samples[nb_generated:] = generated[:n_samples - nb_generated]
+                pbar.update(n_samples - nb_generated)
+                break
 
     return generated_samples
 
