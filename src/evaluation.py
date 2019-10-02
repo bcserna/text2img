@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from scipy import linalg
 from scipy.stats import entropy
+from itertools import cycle
 from tqdm import tqdm
 
 from src.config import GAN_BATCH, DEVICE, END_TOKEN, D_Z
@@ -45,6 +46,39 @@ def frechet_inception_distance(inception_model, real_imgs, fake_imgs):
     mu_fake, sig_fake = activation_statistics(inception_model, fake_imgs)
 
     return frechet_dist(mu_real, sig_real, mu_fake, sig_fake)
+
+
+def embed_captions(captions, encoder, dataset, device=DEVICE):
+    word_embs, sent_embs = encoder(captions)
+    attn_mask = torch.tensor(captions).to(device) == dataset.vocab[END_TOKEN]
+    return word_embs, sent_embs, attn_mask
+
+
+def generate_test_samples(model, dataset, n_samples, batch_size=GAN_BATCH, device=DEVICE):
+    loader = cycle(DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=False,
+                              collate_fn=dataset.collate_fn))
+    generated_samples = np.zeros((n_samples, 3, 256, 256))
+    nb_generated = 0
+    pbar = tqdm(loader, desc='Generating samples', dynamic_ncols=True, total=n_samples)
+    for batch in pbar:
+        word_embs, sent_embs, attn_mask = embed_captions(batch['caption'], model.damsm.txt_enc, dataset, device)
+
+        # Generate images
+        noise = torch.FloatTensor(batch_size, D_Z).to(device)
+        noise.data.normal_(0, 1)
+        generated, att, mu, logvar = model.gen(noise, sent_embs, word_embs, attn_mask)
+        generated = generated[-1]
+        l = len(batch)
+        if nb_generated + l < n_samples:
+            generated_samples[nb_generated:nb_generated + l] = generated
+            nb_generated += l
+            pbar.update(l)
+        else:
+            generated_samples[nb_generated:] = generated[:n_samples - nb_generated]
+            pbar.update(n_samples - nb_generated)
+            break
+
+    return generated_samples
 
 
 def frechet_dist(mu1, sigma1, mu2, sigma2, eps=1e-6):
@@ -105,34 +139,18 @@ def inception_score(gan, dataset, inception_model, batch_size=GAN_BATCH, samples
     training = gan.gen.training
     with torch.no_grad():
         gan.gen.eval()
+        generated = generate_test_samples(gan, dataset, samples, batch_size, device)
+        loader = DataLoader(generated, batch_size=batch_size, drop_last=False, shuffle=False)
         inception_preds = np.zeros((samples, 1000))
+        preds = 0
+        for x in tqdm(loader, desc='Computing inception score'):
+            x = F.interpolate(torch.tensor(x, device=device), size=(299, 299), mode='bilinear', align_corners=False)
+            x = inception_model(x)
+            x = F.softmax(x, dim=-1).data.cpu().numpy()
 
-        loader = DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=True,
-                            collate_fn=dataset.collate_fn)
-
-        epochs = math.ceil(samples / (len(loader) * batch_size))
-        nb_generated = 0
-        for _ in tqdm(range(epochs), desc='Generating samples for inception score', dynamic_ncols=True):
-            for batch in loader:
-                word_embs, sent_embs = gan.damsm.txt_enc(batch['caption'])
-                attn_mask = torch.tensor(batch['caption']).to(device) == dataset.vocab[END_TOKEN]
-
-                # Generate images
-                noise = torch.FloatTensor(batch_size, D_Z).to(device)
-                noise.data.normal_(0, 1)
-                generated, att, mu, logvar = gan.gen(noise, sent_embs, word_embs, attn_mask)
-                x = generated[-1]
-                x = F.interpolate(x, size=(299, 299), mode='bilinear', align_corners=False)
-                x = inception_model(x)
-                x = F.softmax(x, dim=-1).data.cpu().numpy()
-
-                samples_left = samples - nb_generated
-                if samples_left < batch_size:
-                    inception_preds[nb_generated:] = x[:samples_left]
-                    break
-                else:
-                    inception_preds[nb_generated:nb_generated + batch_size] = x
-                    nb_generated += batch_size
+            l = len(x)
+            inception_preds[preds:preds + l] = x
+            preds += l
 
         scores = []
         split_size = samples // splits
