@@ -71,7 +71,7 @@ def generate_test_samples(model, dataset, n_samples, batch_size=GAN_BATCH, devic
             noise.data.normal_(0, 1)
             generated, att, mu, logvar = model.gen(noise, sent_embs, word_embs, attn_mask)
             generated = generated[-1].cpu().numpy()
-            l = len(batch)
+            l = generated.shape[0]
             if nb_generated + l < n_samples:
                 generated_samples[nb_generated:nb_generated + l] = generated
                 nb_generated += l
