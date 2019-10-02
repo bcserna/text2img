@@ -23,13 +23,14 @@ class InceptionFrechetActivationHook:
         self.hook.remove()
 
 
-def activation_statistics(inception_model, imgs, batch_size=32):
+def activation_statistics(inception_model, imgs, batch_size=32, device=DEVICE):
     with torch.no_grad():
         hook = InceptionFrechetActivationHook(inception_model)
         loader = DataLoader(imgs, batch_size=batch_size, shuffle=False, drop_last=False)
         activations = np.zeros((len(imgs), 2048), dtype=np.float32)
-        for i, batch in enumerate(tqdm(loader, desc='Calculating inception activation statistics', dynamic_ncols=True)):
-            inception_model(batch)
+        for i, batch in enumerate(
+                tqdm(loader, desc='Calculating inception activation statistics', dynamic_ncols=True, leave=False)):
+            inception_model(torch.FloatTensor(batch).to(device))
             act = hook.out
             act = F.adaptive_avg_pool2d(act, (1, 1))
             act = torch.flatten(act, 1)
@@ -41,9 +42,13 @@ def activation_statistics(inception_model, imgs, batch_size=32):
         return mu, sig
 
 
-def frechet_inception_distance(inception_model, real_imgs, fake_imgs):
-    mu_real, sig_real = activation_statistics(inception_model, real_imgs)
-    mu_fake, sig_fake = activation_statistics(inception_model, fake_imgs)
+def frechet_inception_distance(model, dataset, inception_model, batch_size=GAN_BATCH, device=DEVICE):
+    nb_samples = len(dataset.train)
+    real_imgs = [imgs[-1] for imgs, cap, label in
+                 tqdm(dataset.train, desc='Loading training images', leave=False, dynamic_ncols=True)]
+    fake_imgs = generate_test_samples(model, dataset, nb_samples, batch_size, device)
+    mu_real, sig_real = activation_statistics(inception_model, real_imgs, batch_size, device)
+    mu_fake, sig_fake = activation_statistics(inception_model, fake_imgs, batch_size, device)
 
     return frechet_dist(mu_real, sig_real, mu_fake, sig_fake)
 
@@ -148,7 +153,7 @@ def inception_score(gan, dataset, inception_model, batch_size=GAN_BATCH, samples
         loader = DataLoader(generated, batch_size=batch_size, drop_last=False, shuffle=False)
         inception_preds = np.zeros((samples, 1000), dtype=np.float32)
         preds = 0
-        for x in tqdm(loader, desc='Computing inception score', leave=False):
+        for x in tqdm(loader, desc='Computing inception score', leave=False, dynamic_ncols=True):
             x = F.interpolate(torch.FloatTensor(x).to(device), size=(299, 299), mode='bilinear',
                               align_corners=False)
             x = inception_model(x)
