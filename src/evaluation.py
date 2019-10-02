@@ -60,27 +60,29 @@ def generate_test_samples(model, dataset, n_samples, batch_size=GAN_BATCH, devic
         model.gen.eval()
         loader = cycle(DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=False,
                                   collate_fn=dataset.collate_fn))
-        generated_samples = np.zeros((n_samples, 3, 256, 256))
+        generated_samples = np.zeros((n_samples, 3, 256, 256), dtype=np.float32)
         nb_generated = 0
-        pbar = tqdm(loader, desc='Generating samples', dynamic_ncols=True, total=n_samples)
-        for batch in pbar:
+        pbar = tqdm(loader, desc='Generating samples', dynamic_ncols=True, leave=False,
+                    total=n_samples
+                    # total=math.ceil(n_samples / batch_size)
+                    )
+        for batch in loader:
             word_embs, sent_embs, attn_mask = embed_captions(batch['caption'], model.damsm.txt_enc, dataset, device)
+            l = sent_embs.size(0)
 
             # Generate images
-            noise = torch.FloatTensor(batch_size, D_Z).to(device)
+            noise = torch.FloatTensor(l, D_Z).to(device)
             noise.data.normal_(0, 1)
             generated, att, mu, logvar = model.gen(noise, sent_embs, word_embs, attn_mask)
             generated = generated[-1].cpu().numpy()
-            l = generated.shape[0]
             if nb_generated + l < n_samples:
                 generated_samples[nb_generated:nb_generated + l] = generated
                 nb_generated += l
                 pbar.update(l)
             else:
                 generated_samples[nb_generated:] = generated[:n_samples - nb_generated]
-                pbar.update(n_samples - nb_generated)
                 break
-
+        pbar.close()
     return generated_samples
 
 
@@ -144,10 +146,11 @@ def inception_score(gan, dataset, inception_model, batch_size=GAN_BATCH, samples
         gan.gen.eval()
         generated = generate_test_samples(gan, dataset, samples, batch_size, device)
         loader = DataLoader(generated, batch_size=batch_size, drop_last=False, shuffle=False)
-        inception_preds = np.zeros((samples, 1000))
+        inception_preds = np.zeros((samples, 1000), dtype=np.float32)
         preds = 0
-        for x in tqdm(loader, desc='Computing inception score'):
-            x = F.interpolate(torch.tensor(x, device=device), size=(299, 299), mode='bilinear', align_corners=False)
+        for x in tqdm(loader, desc='Computing inception score', leave=False):
+            x = F.interpolate(torch.FloatTensor(x).to(device), size=(299, 299), mode='bilinear',
+                              align_corners=False)
             x = inception_model(x)
             x = F.softmax(x, dim=-1).data.cpu().numpy()
 
