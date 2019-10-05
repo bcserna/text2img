@@ -11,7 +11,7 @@ from copy import deepcopy
 
 from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA, MODEL_DIR
 from src.util import rotate_tensor, init_weights
-from src.evaluation import inception_score
+from src.evaluation import inception_score, frechet_inception_distance
 
 
 class AttnGAN:
@@ -49,7 +49,8 @@ class AttnGAN:
         train_loader = DataLoader(dataset.train, **loader_config)
 
         metrics = {
-            'inception': [],
+            # 'inception': [],
+            'FID': [],
             'loss': {
                 'g': [],
                 'd': []
@@ -145,20 +146,23 @@ class AttnGAN:
             metrics['accuracy']['unconditional_real'].append(uncond_real_acc)
             metrics['accuracy']['unconditional_fake'].append(uncond_fake_acc)
 
+            sep = '_' * 10
+            tqdm.write(f'{sep}Epoch {e}{sep}')
+
             if e % test_sample_every == 0:
                 texts = [dataset.test.data['caption_0'].iloc[i] for i in range(nb_test_samples)]
                 generated_samples = self.generate_from_text(texts, dataset)
                 self._save_generated(generated_samples, e, start_time)
-                inc_score = inception_score(self, dataset, self.damsm.img_enc.inception_model, batch_size,
-                                            device=self.device)
-                metrics['inception'].append(inc_score)
-            else:
-                inc_score = None
+                # inc_score = inception_score(self, dataset, self.damsm.img_enc.inception_model, batch_size,
+                #                             device=self.device)
+                # metrics['inception'].append(inc_score)
+                # tqdm.write(f'Inception score: {inc_score[0]:02.2f} +- {inc_score[1]:02.2f}')
 
-            sep = '_' * 10
-            tqdm.write(f'{sep}Epoch {e}{sep}')
-            if inc_score is not None:
-                tqdm.write(f'Inception score: {inc_score[0]:02.2f} +- {inc_score[1]:02.2f}')
+                fid = frechet_inception_distance(self, dataset, self.damsm.img_enc.inception_model, batch_size,
+                                                 self.device)
+                metrics['FID'].append(fid)
+                tqdm.write(f'FID: {fid:04.2f}')
+
             tqdm.write(f'Generator avg loss: {g_loss:05.4f}')
 
             for i, _ in enumerate(self.discriminators):
