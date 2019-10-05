@@ -33,7 +33,8 @@ class AttnGAN:
                                                  betas=(0.5, 0.999))
                                 for d in self.discriminators]
 
-    def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=3, nb_test_samples=2, hist_avg=True):
+    def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=3, nb_test_samples=2, hist_avg=True,
+              fid_evaluator=None):
         start_time = time.strftime("%Y-%m-%d-%H-%M", time.gmtime())
         os.makedirs(start_time)
 
@@ -49,7 +50,6 @@ class AttnGAN:
         train_loader = DataLoader(dataset.train, **loader_config)
 
         metrics = {
-            # 'inception': [],
             'FID': [],
             'loss': {
                 'g': [],
@@ -64,9 +64,8 @@ class AttnGAN:
             }
         }
 
-        # real_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(0), requires_grad=False).to(self.device)
-        # fake_labels = nn.Parameter(torch.FloatTensor(batch_size).fill_(1), requires_grad=False).to(self.device)
-        # match_labels = nn.Parameter(torch.LongTensor(range(batch_size)), requires_grad=False).to(self.device)
+        if self.fid_evaulator is not None:
+            fid = fid_evaluator(dataset, self.damsm.img_enc.inception_model, batch_size, self.device)
 
         noise = torch.FloatTensor(batch_size, D_Z).to(self.device)
         gen_updates = 0
@@ -158,10 +157,10 @@ class AttnGAN:
                 # metrics['inception'].append(inc_score)
                 # tqdm.write(f'Inception score: {inc_score[0]:02.2f} +- {inc_score[1]:02.2f}')
 
-                fid = frechet_inception_distance(self, dataset, self.damsm.img_enc.inception_model, batch_size,
-                                                 self.device)
-                metrics['FID'].append(fid)
-                tqdm.write(f'FID: {fid:04.2f}')
+                if fid_evaluator is not None:
+                    fid_score = fid.evaluate(self)
+                    metrics['FID'].append(fid_score)
+                    tqdm.write(f'FID: {fid_score:04.2f}')
 
             tqdm.write(f'Generator avg loss: {g_loss:05.4f}')
 

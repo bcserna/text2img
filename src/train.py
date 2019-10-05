@@ -1,18 +1,20 @@
 from src.config import DEVICE
 from src.data import CUB
 from src.damsm import DAMSM
+from src.evaluation import FIDEvaluator
 from src.gan import AttnGAN
 from src.generator import Generator
 from src.discriminator import Discriminator, PatchDiscriminator
 
 
-def train_gan(epochs, gan=None, device=DEVICE):
+def train_gan(epochs, name, gan=None, device=DEVICE):
     cub = CUB()
     damsm = DAMSM.load('l01992')
     if gan is None:
         generator = Generator(device)
-        # discriminator = Discriminator(device)
-        discriminator = PatchDiscriminator(device)
+        discriminator = Discriminator(device)
+        # discriminator = PatchDiscriminator(device)
         gan = AttnGAN(damsm, generator, discriminator, device)
-    metrics = gan.train(cub, epochs)
+    metrics = gan.train(cub, epochs, evaluator=FIDEvaluator)
+    gan.save(name)
     return gan, metrics

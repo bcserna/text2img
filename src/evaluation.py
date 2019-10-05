@@ -42,6 +42,22 @@ def activation_statistics(inception_model, imgs, batch_size=32, device=DEVICE):
         return mu, sig
 
 
+class FIDEvaluator:
+    def __init__(self, dataset, inception_model, batch_size=GAN_BATCH, device=DEVICE):
+        self.dataset = dataset
+        self.inception_model = inception_model
+        self.batch_size = batch_size
+        self.device = device
+        real_imgs = [imgs[-1] for imgs, cap, label in self.dataset.test]
+        self.mu_real, self.sig_real = activation_statistics(inception_model, real_imgs, self.batch_size, self.device)
+
+    def evaluate(self, model):
+        nb_samples = len(self.dataset.test)
+        fake_imgs = generate_test_samples(model, self.dataset, nb_samples, self.batch_size, self.device)
+        mu_fake, sig_fake = activation_statistics(self.inception_model, fake_imgs, self.batch_size, self.device)
+        return frechet_dist(self.mu_real, self.sig_real, mu_fake, sig_fake)
+
+
 def frechet_inception_distance(model, dataset, inception_model, batch_size=GAN_BATCH, device=DEVICE):
     nb_samples = len(dataset.train)
     real_imgs = [imgs[-1] for imgs, cap, label in
