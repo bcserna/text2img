@@ -33,8 +33,7 @@ class AttnGAN:
                                                  betas=(0.5, 0.999))
                                 for d in self.discriminators]
 
-    def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=3, nb_test_samples=2, hist_avg=True,
-              fid_evaluator=None):
+    def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=3, hist_avg=True, fid_evaluator=None):
         start_time = time.strftime("%Y-%m-%d-%H-%M", time.gmtime())
         os.makedirs(start_time)
 
@@ -149,9 +148,12 @@ class AttnGAN:
             tqdm.write(f'{sep}Epoch {e}{sep}')
 
             if e % test_sample_every == 0:
-                texts = [dataset.test.data['caption_0'].iloc[i] for i in range(nb_test_samples)]
-                generated_samples = self.generate_from_text(texts, dataset)
+                self.gen.eval()
+                texts = [dataset.test.data['caption_0'].iloc[sample_idx] for sample_idx in range(2)]
+                # generated_samples = self.generate_from_text(texts, dataset)
+                generated_samples = [resolution.unsqueeze(0) for resolution in self.sample_test_set(dataset)]
                 self._save_generated(generated_samples, e, start_time)
+
                 # inc_score = inception_score(self, dataset, self.damsm.img_enc.inception_model, batch_size,
                 #                             device=self.device)
                 # metrics['inception'].append(inc_score)
@@ -175,6 +177,36 @@ class AttnGAN:
                            f'skips({disc_skips[i]})')
 
         return metrics
+
+    def sample_test_set(self, dataset, nb_samples=4, nb_captions=2, noise_variations=2):
+        texts = [dataset.test.data[f'caption_{cap_idx}'].iloc[sample_idx]
+                 for sample_idx in range(nb_samples)
+                 for cap_idx in range(nb_captions)]
+
+        generated_samples = [self.generate_from_text(texts, dataset) for _ in range(noise_variations)]
+
+        # combined_img64 = torch.FloatTensor(3, nb_samples * 64, nb_captions * noise_variations * 64)
+        combined_img64 = torch.FloatTensor()
+        combined_img128 = torch.FloatTensor()
+        combined_img256 = torch.FloatTensor()
+
+        for noise_variant in generated_samples:
+            noise_var_img64 = torch.FloatTensor()
+            noise_var_img128 = torch.FloatTensor()
+            noise_var_img256 = torch.FloatTensor()
+            for i in range(nb_samples):
+                # rows: samples, columns: captions * noise variants
+                row64 = torch.cat([noise_variant[0][i * nb_captions + j] for j in range(nb_captions)], dim=-1)
+                row128 = torch.cat([noise_variant[1][i * nb_captions + j] for j in range(nb_captions)], dim=-1)
+                row256 = torch.cat([noise_variant[2][i * nb_captions + j] for j in range(nb_captions)], dim=-1)
+                noise_var_img64 = torch.cat([noise_var_img64, row64], dim=-2)
+                noise_var_img128 = torch.cat([noise_var_img128, row128], dim=-2)
+                noise_var_img256 = torch.cat([noise_var_img256, row256], dim=-2)
+            combined_img64 = torch.cat([combined_img64, noise_var_img64], dim=-1)
+            combined_img128 = torch.cat([combined_img128, noise_var_img128], dim=-1)
+            combined_img256 = torch.cat([combined_img256, noise_var_img256], dim=-1)
+
+        return combined_img64, combined_img128, combined_img256
 
     @staticmethod
     def KL_loss(mu, logvar):
