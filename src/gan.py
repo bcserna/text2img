@@ -311,7 +311,7 @@ class AttnGAN:
         self.gen.eval(), self.disc.eval()
 
     @staticmethod
-    def load(name, damsm, load_dir=MODEL_DIR):
-        attngan = AttnGAN(damsm)
+    def load(name, damsm, generator_type, discriminator_type, load_dir=MODEL_DIR):
+        attngan = AttnGAN(damsm, generator_type(), discriminator_type())
         attngan.load_(name, load_dir)
         return attngan
