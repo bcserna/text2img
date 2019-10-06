@@ -4,7 +4,6 @@ from torch import nn
 from src.util import conv1x1
 
 
-# TODO extract shared code with class Attention
 def func_attention(query, context, gamma1):
     """
     query: batch x ndf x queryL
