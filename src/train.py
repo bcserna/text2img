@@ -15,6 +15,11 @@ def train_gan(epochs, name, gan=None, device=DEVICE):
         discriminator = Discriminator(device)
         # discriminator = PatchDiscriminator(device)
         gan = AttnGAN(damsm, generator, discriminator, device)
-    metrics = gan.train(cub, epochs, evaluator=FIDEvaluator)
+    metrics = gan.train(cub, epochs, fid_evaluator=FIDEvaluator)
     gan.save(name)
     return gan, metrics
+
+
+if __name__ == '__main__':
+    import plac
+    plac.call(train_gan)
