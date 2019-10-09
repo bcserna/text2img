@@ -103,7 +103,8 @@ class DAMSM:
             if avg_test_loss < min_test_loss:
                 new_best = '!'
                 self.save(f'epoch_{e}')
-                self.remove_previous_best(f'epoch_{min_test_loss}')
+                if e > 0:
+                    self.remove_previous_best(f'epoch_{min_test_loss_epoch}')
                 min_test_loss = avg_test_loss
                 min_test_loss_epoch = e
                 patience_step = 0
