@@ -100,10 +100,10 @@ class DAMSM:
                 losses['train'].append(avg_train_loss)
                 losses['test'].append(avg_test_loss)
 
-            new_best = ''
             if avg_test_loss < min_test_loss:
                 new_best = '!'
                 self.save(f'epoch_{e}')
+                self.remove_previous_best(f'epoch_{min_test_loss}')
                 min_test_loss = avg_test_loss
                 min_test_loss_epoch = e
                 patience_step = 0
@@ -142,6 +142,12 @@ class DAMSM:
         config = {'vocab_size': self.txt_enc.vocab_size}
         with open(f'{save_dir}/{name}_config.json', 'w') as f:
             json.dump(config, f)
+
+    @staticmethod
+    def remove_previous_best(name, save_dir=MODEL_DIR):
+        os.remove(f'{save_dir}/{name}_text_enc.pt')
+        os.remove(f'{save_dir}/{name}_img_enc.pt')
+        os.remove(f'{save_dir}/{name}_config.json')
 
     @staticmethod
     def load(name, load_dir=MODEL_DIR):
