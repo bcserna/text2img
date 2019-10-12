@@ -73,6 +73,7 @@ class AttnGAN:
         for e in tqdm(range(epoch), desc='Epochs', dynamic_ncols=True):
             self.gen.train(), self.disc.train()
             g_loss = 0
+            g_stage_loss = np.zeros(3, dtype=float)
             d_loss = np.zeros(3, dtype=float)
             real_acc = np.zeros(3, dtype=float)
             fake_acc = np.zeros(3, dtype=float)
@@ -107,7 +108,9 @@ class AttnGAN:
                 disc_skips += batch_disc_skips
 
                 # Generator loss
-                g_total = self.generator_step(generated, word_embs, sent_embs, mu, logvar, batch['label'])
+                g_total, batch_g_stage_loss = self.generator_step(generated, word_embs, sent_embs, mu, logvar,
+                                                                  batch['label'])
+                g_stage_loss += batch_g_stage_loss
                 gen_updates += 1
 
                 avg_g_loss = g_total.item() / batch_size
@@ -130,7 +133,7 @@ class AttnGAN:
             batches = len(train_loader)
 
             g_loss /= batches
-
+            g_stage_loss /= batches
             d_loss /= batches
             real_acc /= batches
             fake_acc /= batches
@@ -166,7 +169,8 @@ class AttnGAN:
                     metrics['FID'].append(fid_score)
                     tqdm.write(f'FID: {fid_score:04.2f}')
 
-            tqdm.write(f'Generator avg loss: {g_loss:05.4f}')
+            tqdm.write(f'Generator avg loss: {g_loss:05.4f}  '
+                       f'stage0({g_stage_loss[0]})  stage1({g_stage_loss[1]})  stage2({g_stage_loss[2]})')
 
             for i, _ in enumerate(self.discriminators):
                 tqdm.write(f'Discriminator{i} avg: '
@@ -217,6 +221,9 @@ class AttnGAN:
         return loss
 
     def generator_step(self, generated_imgs, word_embs, sent_embs, mu, logvar, class_labels):
+        avg_stage_g_loss = [0, 0, 0]
+        batch_size = sent_embs.size(0)
+
         local_features, global_features = self.damsm.img_enc(generated_imgs[-1])
         batch_size = sent_embs.size(0)
         match_labels = torch.LongTensor(range(batch_size)).requires_grad_(False).to(self.device)
@@ -229,7 +236,7 @@ class AttnGAN:
 
         kl_loss = self.KL_loss(mu, logvar)
 
-        g_loss = w_loss + s_loss + kl_loss
+        g_total = w_loss + s_loss + kl_loss
 
         for i, d in enumerate(self.discriminators):
             features = d(generated_imgs[i])
@@ -242,12 +249,14 @@ class AttnGAN:
             uncond_fake_logits = d.logit(features)
             uncond_disc_error = F.binary_cross_entropy_with_logits(uncond_fake_logits, real_labels)
 
-            g_loss += disc_error + uncond_disc_error
+            stage_loss = disc_error + uncond_disc_error
+            avg_stage_g_loss[i] = stage_loss.item() / batch_size
+            g_total += avg_stage_g_loss
 
-        g_loss.backward()
+        g_total.backward()
         self.gen_optimizer.step()
 
-        return g_loss
+        return g_total, avg_stage_g_loss
 
     def discriminator_step(self, real_imgs, generated_imgs, sent_embs, label_smoothing, skip_acc_threshold=0.9,
                            p_flip=0.05, halting=False):
