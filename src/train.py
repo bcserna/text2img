@@ -9,7 +9,7 @@ from src.generator import Generator
 from src.discriminator import Discriminator, PatchDiscriminator
 
 @click.command()
-@click.argument('epochs')
+@click.argument('epochs', type=int)
 @click.argument('name')
 @click.option('--gan', default=None)
 @click.option('--damsm', default=None)
