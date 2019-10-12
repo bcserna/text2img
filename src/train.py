@@ -7,9 +7,10 @@ from src.generator import Generator
 from src.discriminator import Discriminator, PatchDiscriminator
 
 
-def train_gan(epochs, name, gan=None, device=DEVICE):
+def train_gan(epochs, name, gan=None, damsm_model=None, device=DEVICE):
     cub = CUB()
-    damsm = DAMSM.load('l01992')
+    if damsm_model is not None:
+        damsm = DAMSM.load(damsm_model)
     if gan is None:
         generator = Generator(device)
         discriminator = Discriminator(device)
