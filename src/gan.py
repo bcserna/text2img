@@ -1,3 +1,5 @@
+import json
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -332,10 +334,13 @@ class AttnGAN:
             save_image(generated[1][i], f'{save_dir}/{i}_128.jpg')
             save_image(generated[2][i], f'{save_dir}/{i}_256.jpg')
 
-    def save(self, name, save_dir=MODEL_DIR):
+    def save(self, name, save_dir=MODEL_DIR, metrics=None):
         os.makedirs(save_dir, exist_ok=True)
         torch.save(self.gen.state_dict(), f'{save_dir}/{name}_generator.pt')
         torch.save(self.disc.state_dict(), f'{save_dir}/{name}_discriminator.pt')
+        if metrics is not None:
+            with open(f'{save_dir}/{name}_metrics.json', 'w') as f:
+                json.dump(metrics, f)
 
     def load_(self, name, load_dir=MODEL_DIR):
         self.gen.load_state_dict(torch.load(f'{load_dir}/{name}_generator.pt'))
