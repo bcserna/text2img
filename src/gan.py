@@ -65,7 +65,7 @@ class AttnGAN:
             }
         }
 
-        if self.fid_evaulator is not None:
+        if fid_evaluator is not None:
             fid = fid_evaluator(dataset, self.damsm.img_enc.inception_model, batch_size, self.device)
 
         noise = torch.FloatTensor(batch_size, D_Z).to(self.device)
