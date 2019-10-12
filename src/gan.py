@@ -151,7 +151,7 @@ class AttnGAN:
 
             if e % test_sample_every == 0:
                 self.gen.eval()
-                texts = [dataset.test.data['caption_0'].iloc[sample_idx] for sample_idx in range(2)]
+                # texts = [dataset.test.data['caption_0'].iloc[sample_idx] for sample_idx in range(2)]
                 # generated_samples = self.generate_from_text(texts, dataset)
                 generated_samples = [resolution.unsqueeze(0) for resolution in self.sample_test_set(dataset)]
                 self._save_generated(generated_samples, e, start_time)
@@ -250,7 +250,7 @@ class AttnGAN:
         return g_loss
 
     def discriminator_step(self, real_imgs, generated_imgs, sent_embs, label_smoothing, skip_acc_threshold=0.9,
-                           p_flip=0.05):
+                           p_flip=0.05, halting=False):
         batch_size = sent_embs.size(0)
 
         avg_d_loss = [0, 0, 0]
@@ -298,13 +298,14 @@ class AttnGAN:
             uncond_fake_error = F.binary_cross_entropy_with_logits(uncond_fake_logits, fake_labels)
             uncond_fake_accuracy[i] = (uncond_fake_logits < 0).sum().item() / uncond_fake_logits.numel()
 
-            error = ((real_error + uncond_real_error) / 2 + fake_error + uncond_fake_error + mismatched_error) / 3
+            error = (real_error + uncond_real_error) / 2 + (fake_error + uncond_fake_error + mismatched_error) / 3
 
-            if fake_accuracy[i] + real_accuracy[i] < skip_acc_threshold * 2:
+            if not halting or fake_accuracy[i] + real_accuracy[i] < skip_acc_threshold * 2:
                 error.backward()
                 self.disc_optimizers[i].step()
             else:
                 skipped[i] = 1
+
             avg_d_loss[i] = error.item() / batch_size
 
         return avg_d_loss, real_accuracy, fake_accuracy, mismatched_accuracy, uncond_real_accuracy, uncond_fake_accuracy, skipped
