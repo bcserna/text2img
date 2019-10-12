@@ -49,7 +49,7 @@ class ImageEncoder(nn.Module):
     def __init__(self, device=DEVICE):
         super().__init__()
         self.device = device
-        self.inception_model = torchvision.models.inception_v3(pretrained=True).to(self.device)
+        self.inception_model = torchvision.models.inception_v3(pretrained=True).to(self.device).eval()
         # Freeze Inception V3 parameters
         for param in self.inception_model.parameters():
             param.requires_grad = False
