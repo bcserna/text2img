@@ -349,9 +349,9 @@ class AttnGAN:
         os.makedirs(save_dir)
 
         for i in range(nb_samples):
-            save_image(generated[0][i], f'{save_dir}/{i}_64.jpg')
-            save_image(generated[1][i], f'{save_dir}/{i}_128.jpg')
-            save_image(generated[2][i], f'{save_dir}/{i}_256.jpg')
+            save_image(generated[0][i], f'{save_dir}/{i}_64.jpg', normalize=True, range=(-1, 1))
+            save_image(generated[1][i], f'{save_dir}/{i}_128.jpg', normalize=True, range=(-1, 1))
+            save_image(generated[2][i], f'{save_dir}/{i}_256.jpg', normalize=True, range=(-1, 1))
 
     def save(self, name, save_dir=MODEL_DIR, metrics=None):
         os.makedirs(save_dir, exist_ok=True)
