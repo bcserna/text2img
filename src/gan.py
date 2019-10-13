@@ -73,6 +73,9 @@ class AttnGAN:
         for e in tqdm(range(epoch), desc='Epochs', dynamic_ncols=True):
             self.gen.train(), self.disc.train()
             g_loss = 0
+            w_loss = 0
+            s_loss = 0
+            kl_loss = 0
             g_stage_loss = np.zeros(3, dtype=float)
             d_loss = np.zeros(3, dtype=float)
             real_acc = np.zeros(3, dtype=float)
@@ -108,9 +111,16 @@ class AttnGAN:
                 disc_skips += batch_disc_skips
 
                 # Generator loss
-                g_total, batch_g_stage_loss = self.generator_step(generated, word_embs, sent_embs, mu, logvar,
-                                                                  batch['label'])
+                g_total, batch_g_stage_loss, batch_w_loss, batch_s_loss, batch_kl_loss = self.generator_step(generated,
+                                                                                                             word_embs,
+                                                                                                             sent_embs,
+                                                                                                             mu, logvar,
+                                                                                                             batch[
+                                                                                                                 'label'])
                 g_stage_loss += batch_g_stage_loss
+                w_loss += batch_w_loss
+                s_loss += batch_s_loss
+                kl_loss += batch_kl_loss
                 gen_updates += 1
 
                 avg_g_loss = g_total.item() / batch_size
@@ -134,6 +144,9 @@ class AttnGAN:
 
             g_loss /= batches
             g_stage_loss /= batches
+            w_loss /= batches
+            s_loss /= batches
+            kl_loss /= batches
             d_loss /= batches
             real_acc /= batches
             fake_acc /= batches
@@ -167,19 +180,20 @@ class AttnGAN:
                 if fid_evaluator is not None:
                     fid_score = fid.evaluate(self)
                     metrics['FID'].append(fid_score)
-                    tqdm.write(f'FID: {fid_score:04.2f}')
+                    tqdm.write(f'FID: {fid_score:.2f}')
 
-            tqdm.write(f'Generator avg loss: {g_loss:05.4f}  '
-                       f'stage0({g_stage_loss[0]})  stage1({g_stage_loss[1]})  stage2({g_stage_loss[2]})')
+            tqdm.write(f'Generator avg loss: total({g_loss:.3f})  '
+                       f'stage0({g_stage_loss[0]:.3f})  stage1({g_stage_loss[1]:.3f})  stage2({g_stage_loss[2]:.3f})  '
+                       f'w({w_loss}.3f)  s({s_loss}.3f)  kl({kl_loss}.3f)')
 
             for i, _ in enumerate(self.discriminators):
                 tqdm.write(f'Discriminator{i} avg: '
-                           f'loss({d_loss[i]:05.4f})  '
-                           f'r-acc({real_acc[i]:04.3f})  '
-                           f'f-acc({fake_acc[i]:04.3f})  '
-                           f'm-acc({mismatched_acc[i]:04.3f})  '
-                           f'ur-acc({uncond_real_acc[i]:04.3f})  '
-                           f'uf-acc({uncond_fake_acc[i]:04.3f})  '
+                           f'loss({d_loss[i]:.3f})  '
+                           f'r-acc({real_acc[i]:.3f})  '
+                           f'f-acc({fake_acc[i]:.3f})  '
+                           f'm-acc({mismatched_acc[i]:.3f})  '
+                           f'ur-acc({uncond_real_acc[i]:.3f})  '
+                           f'uf-acc({uncond_fake_acc[i]:.3f})  '
                            f'skips({disc_skips[i]})')
 
         return metrics
@@ -222,7 +236,6 @@ class AttnGAN:
 
     def generator_step(self, generated_imgs, word_embs, sent_embs, mu, logvar, class_labels):
         avg_stage_g_loss = [0, 0, 0]
-        batch_size = sent_embs.size(0)
 
         local_features, global_features = self.damsm.img_enc(generated_imgs[-1])
         batch_size = sent_embs.size(0)
@@ -256,7 +269,7 @@ class AttnGAN:
         g_total.backward()
         self.gen_optimizer.step()
 
-        return g_total, avg_stage_g_loss
+        return g_total, avg_stage_g_loss, w_loss.item() / batch_size, s_loss.item() / batch_size, kl_loss.item()
 
     def discriminator_step(self, real_imgs, generated_imgs, sent_embs, label_smoothing, skip_acc_threshold=0.9,
                            p_flip=0.05, halting=False):
