@@ -289,7 +289,7 @@ class AttnGAN:
             fake_labels = torch.Tensor(real_logits.size()).fill_(0).requires_grad_(False).to(self.device)
 
             real_labels = real_labels - label_smoothing
-            fake_labels = fake_labels + label_smoothing
+            # fake_labels = fake_labels + label_smoothing
 
             flip_mask = torch.Tensor(real_labels.size()).bernoulli_(p_flip).type(torch.bool)
             real_labels[flip_mask], fake_labels[flip_mask] = fake_labels[flip_mask], real_labels[flip_mask]
