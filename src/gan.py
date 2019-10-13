@@ -180,7 +180,7 @@ class AttnGAN:
 
             tqdm.write(f'Generator avg loss: total({g_loss:.3f})  '
                        f'stage0({g_stage_loss[0]:.3f})  stage1({g_stage_loss[1]:.3f})  stage2({g_stage_loss[2]:.3f})  '
-                       f'w({w_loss}.3f)  s({s_loss}.3f)  kl({kl_loss}.3f)')
+                       f'w({w_loss:.3f})  s({s_loss:.3f})  kl({kl_loss:.3f})')
 
             for i, _ in enumerate(self.discriminators):
                 tqdm.write(f'Discriminator{i} avg: '
