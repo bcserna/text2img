@@ -212,9 +212,9 @@ class AttnGAN:
             noise_var_img256 = torch.FloatTensor()
             for i in range(nb_samples):
                 # rows: samples, columns: captions * noise variants
-                row64 = torch.cat([noise_variant[0][i * nb_captions + j] for j in range(nb_captions)], dim=-1)
-                row128 = torch.cat([noise_variant[1][i * nb_captions + j] for j in range(nb_captions)], dim=-1)
-                row256 = torch.cat([noise_variant[2][i * nb_captions + j] for j in range(nb_captions)], dim=-1)
+                row64 = torch.cat([noise_variant[0][i * nb_captions + j] for j in range(nb_captions)], dim=-1).cpu()
+                row128 = torch.cat([noise_variant[1][i * nb_captions + j] for j in range(nb_captions)], dim=-1).cpu()
+                row256 = torch.cat([noise_variant[2][i * nb_captions + j] for j in range(nb_captions)], dim=-1).cpu()
                 noise_var_img64 = torch.cat([noise_var_img64, row64], dim=-2)
                 noise_var_img128 = torch.cat([noise_var_img128, row128], dim=-2)
                 noise_var_img256 = torch.cat([noise_var_img256, row256], dim=-2)
