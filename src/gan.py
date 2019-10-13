@@ -111,12 +111,8 @@ class AttnGAN:
                 disc_skips += batch_disc_skips
 
                 # Generator loss
-                g_total, batch_g_stage_loss, batch_w_loss, batch_s_loss, batch_kl_loss = self.generator_step(generated,
-                                                                                                             word_embs,
-                                                                                                             sent_embs,
-                                                                                                             mu, logvar,
-                                                                                                             batch[
-                                                                                                                 'label'])
+                batch_g_losses = self.generator_step(generated, word_embs, sent_embs, mu, logvar, batch['label'])
+                g_total, batch_g_stage_loss, batch_w_loss, batch_s_loss, batch_kl_loss = batch_g_losses
                 g_stage_loss += batch_g_stage_loss
                 w_loss += batch_w_loss
                 s_loss += batch_s_loss
@@ -264,7 +260,7 @@ class AttnGAN:
 
             stage_loss = disc_error + uncond_disc_error
             avg_stage_g_loss[i] = stage_loss.item() / batch_size
-            g_total += avg_stage_g_loss
+            g_total += stage_loss
 
         g_total.backward()
         self.gen_optimizer.step()
