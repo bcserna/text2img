@@ -1,3 +1,5 @@
+import json
+
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -9,7 +11,7 @@ from tqdm import tqdm
 from copy import deepcopy
 
 from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA, MODEL_DIR
-from src.util import rotate_tensor, init_weights
+from src.util import rotate_tensor, init_weights, grad_norm
 from src.evaluation import inception_score, frechet_inception_distance
 
 
@@ -62,7 +64,7 @@ class AttnGAN:
             }
         }
 
-        if self.fid_evaulator is not None:
+        if fid_evaluator is not None:
             fid = fid_evaluator(dataset, self.damsm.img_enc.inception_model, batch_size, self.device)
 
         noise = torch.FloatTensor(batch_size, D_Z).to(self.device)
@@ -70,6 +72,10 @@ class AttnGAN:
         for e in tqdm(range(epoch), desc='Epochs', dynamic_ncols=True):
             self.gen.train(), self.disc.train()
             g_loss = 0
+            w_loss = 0
+            s_loss = 0
+            kl_loss = 0
+            g_stage_loss = np.zeros(3, dtype=float)
             d_loss = np.zeros(3, dtype=float)
             real_acc = np.zeros(3, dtype=float)
             fake_acc = np.zeros(3, dtype=float)
@@ -104,7 +110,12 @@ class AttnGAN:
                 disc_skips += batch_disc_skips
 
                 # Generator loss
-                g_total = self.generator_step(generated, word_embs, sent_embs, mu, logvar, batch['label'])
+                batch_g_losses = self.generator_step(generated, word_embs, sent_embs, mu, logvar, batch['label'])
+                g_total, batch_g_stage_loss, batch_w_loss, batch_s_loss, batch_kl_loss = batch_g_losses
+                g_stage_loss += batch_g_stage_loss
+                w_loss += batch_w_loss
+                s_loss += batch_s_loss
+                kl_loss += batch_kl_loss
                 gen_updates += 1
 
                 avg_g_loss = g_total.item() / batch_size
@@ -119,15 +130,22 @@ class AttnGAN:
                     for p, avg_p in zip(self.gen.parameters(), avg_g_params):
                         p.data.copy_(avg_p)
 
-                train_pbar.set_description(f'Training (G: {avg_g_loss:05.4f}  '
-                                           f'D64: {batch_d_loss[0]:05.4f}  '
-                                           f'D128: {batch_d_loss[1]:05.4f}  '
-                                           f'D256: {batch_d_loss[2]:05.4f})')
+                # train_pbar.set_description(f'Training (G: {avg_g_loss:05.4f}  '
+                #                            f'D64: {batch_d_loss[0]:05.4f}  '
+                #                            f'D128: {batch_d_loss[1]:05.4f}  '
+                #                            f'D256: {batch_d_loss[2]:05.4f})')
+                train_pbar.set_description(f'Training (G: {grad_norm(self.gen):.2f}  '
+                                           f'D64: {grad_norm(self.disc.d64):.2f}  '
+                                           f'D128: {grad_norm(self.disc.d128):.2f}  '
+                                           f'D256: {grad_norm(self.disc.d256):.2f})')
 
             batches = len(train_loader)
 
             g_loss /= batches
-
+            g_stage_loss /= batches
+            w_loss /= batches
+            s_loss /= batches
+            kl_loss /= batches
             d_loss /= batches
             real_acc /= batches
             fake_acc /= batches
@@ -148,7 +166,7 @@ class AttnGAN:
 
             if e % test_sample_every == 0:
                 self.gen.eval()
-                texts = [dataset.test.data['caption_0'].iloc[sample_idx] for sample_idx in range(2)]
+                # texts = [dataset.test.data['caption_0'].iloc[sample_idx] for sample_idx in range(2)]
                 # generated_samples = self.generate_from_text(texts, dataset)
                 generated_samples = [resolution.unsqueeze(0) for resolution in self.sample_test_set(dataset)]
                 self._save_generated(generated_samples, e, start_time)
@@ -161,18 +179,20 @@ class AttnGAN:
                 if fid_evaluator is not None:
                     fid_score = fid.evaluate(self)
                     metrics['FID'].append(fid_score)
-                    tqdm.write(f'FID: {fid_score:04.2f}')
+                    tqdm.write(f'FID: {fid_score:.2f}')
 
-            tqdm.write(f'Generator avg loss: {g_loss:05.4f}')
+            tqdm.write(f'Generator avg loss: total({g_loss:.3f})  '
+                       f'stage0({g_stage_loss[0]:.3f})  stage1({g_stage_loss[1]:.3f})  stage2({g_stage_loss[2]:.3f})  '
+                       f'w({w_loss:.3f})  s({s_loss:.3f})  kl({kl_loss:.3f})')
 
             for i, _ in enumerate(self.discriminators):
                 tqdm.write(f'Discriminator{i} avg: '
-                           f'loss({d_loss[i]:05.4f})  '
-                           f'r-acc({real_acc[i]:04.3f})  '
-                           f'f-acc({fake_acc[i]:04.3f})  '
-                           f'm-acc({mismatched_acc[i]:04.3f})  '
-                           f'ur-acc({uncond_real_acc[i]:04.3f})  '
-                           f'uf-acc({uncond_fake_acc[i]:04.3f})  '
+                           f'loss({d_loss[i]:.3f})  '
+                           f'r-acc({real_acc[i]:.3f})  '
+                           f'f-acc({fake_acc[i]:.3f})  '
+                           f'm-acc({mismatched_acc[i]:.3f})  '
+                           f'ur-acc({uncond_real_acc[i]:.3f})  '
+                           f'uf-acc({uncond_fake_acc[i]:.3f})  '
                            f'skips({disc_skips[i]})')
 
         return metrics
@@ -195,9 +215,9 @@ class AttnGAN:
             noise_var_img256 = torch.FloatTensor()
             for i in range(nb_samples):
                 # rows: samples, columns: captions * noise variants
-                row64 = torch.cat([noise_variant[0][i * nb_captions + j] for j in range(nb_captions)], dim=-1)
-                row128 = torch.cat([noise_variant[1][i * nb_captions + j] for j in range(nb_captions)], dim=-1)
-                row256 = torch.cat([noise_variant[2][i * nb_captions + j] for j in range(nb_captions)], dim=-1)
+                row64 = torch.cat([noise_variant[0][i * nb_captions + j] for j in range(nb_captions)], dim=-1).cpu()
+                row128 = torch.cat([noise_variant[1][i * nb_captions + j] for j in range(nb_captions)], dim=-1).cpu()
+                row256 = torch.cat([noise_variant[2][i * nb_captions + j] for j in range(nb_captions)], dim=-1).cpu()
                 noise_var_img64 = torch.cat([noise_var_img64, row64], dim=-2)
                 noise_var_img128 = torch.cat([noise_var_img128, row128], dim=-2)
                 noise_var_img256 = torch.cat([noise_var_img256, row256], dim=-2)
@@ -214,6 +234,8 @@ class AttnGAN:
         return loss
 
     def generator_step(self, generated_imgs, word_embs, sent_embs, mu, logvar, class_labels):
+        avg_stage_g_loss = [0, 0, 0]
+
         local_features, global_features = self.damsm.img_enc(generated_imgs[-1])
         batch_size = sent_embs.size(0)
         match_labels = torch.LongTensor(range(batch_size)).requires_grad_(False).to(self.device)
@@ -226,7 +248,7 @@ class AttnGAN:
 
         kl_loss = self.KL_loss(mu, logvar)
 
-        g_loss = w_loss + s_loss + kl_loss
+        g_total = w_loss + s_loss + kl_loss
 
         for i, d in enumerate(self.discriminators):
             features = d(generated_imgs[i])
@@ -239,15 +261,17 @@ class AttnGAN:
             uncond_fake_logits = d.logit(features)
             uncond_disc_error = F.binary_cross_entropy_with_logits(uncond_fake_logits, real_labels)
 
-            g_loss += disc_error + uncond_disc_error
+            stage_loss = disc_error + uncond_disc_error
+            avg_stage_g_loss[i] = stage_loss.item() / batch_size
+            g_total += stage_loss
 
-        g_loss.backward()
+        g_total.backward()
         self.gen_optimizer.step()
 
-        return g_loss
+        return g_total, avg_stage_g_loss, w_loss.item() / batch_size, s_loss.item() / batch_size, kl_loss.item()
 
     def discriminator_step(self, real_imgs, generated_imgs, sent_embs, label_smoothing, skip_acc_threshold=0.9,
-                           p_flip=0.05):
+                           p_flip=0.05, halting=False):
         batch_size = sent_embs.size(0)
 
         avg_d_loss = [0, 0, 0]
@@ -268,7 +292,7 @@ class AttnGAN:
             fake_labels = torch.Tensor(real_logits.size()).fill_(0).requires_grad_(False).to(self.device)
 
             real_labels = real_labels - label_smoothing
-            fake_labels = fake_labels + label_smoothing
+            # fake_labels = fake_labels + label_smoothing
 
             flip_mask = torch.Tensor(real_labels.size()).bernoulli_(p_flip).type(torch.bool)
             real_labels[flip_mask], fake_labels[flip_mask] = fake_labels[flip_mask], real_labels[flip_mask]
@@ -295,13 +319,14 @@ class AttnGAN:
             uncond_fake_error = F.binary_cross_entropy_with_logits(uncond_fake_logits, fake_labels)
             uncond_fake_accuracy[i] = (uncond_fake_logits < 0).sum().item() / uncond_fake_logits.numel()
 
-            error = ((real_error + uncond_real_error) / 2 + fake_error + uncond_fake_error + mismatched_error) / 3
+            error = (real_error + uncond_real_error) / 2 + (fake_error + uncond_fake_error + mismatched_error) / 3
 
-            if fake_accuracy[i] + real_accuracy[i] < skip_acc_threshold * 2:
+            if not halting or fake_accuracy[i] + real_accuracy[i] < skip_acc_threshold * 2:
                 error.backward()
                 self.disc_optimizers[i].step()
             else:
                 skipped[i] = 1
+
             avg_d_loss[i] = error.item() / batch_size
 
         return avg_d_loss, real_accuracy, fake_accuracy, mismatched_accuracy, uncond_real_accuracy, uncond_fake_accuracy, skipped
@@ -327,14 +352,17 @@ class AttnGAN:
         os.makedirs(save_dir)
 
         for i in range(nb_samples):
-            save_image(generated[0][i], f'{save_dir}/{i}_64.jpg')
-            save_image(generated[1][i], f'{save_dir}/{i}_128.jpg')
-            save_image(generated[2][i], f'{save_dir}/{i}_256.jpg')
+            save_image(generated[0][i], f'{save_dir}/{i}_64.jpg', normalize=True, range=(-1, 1))
+            save_image(generated[1][i], f'{save_dir}/{i}_128.jpg', normalize=True, range=(-1, 1))
+            save_image(generated[2][i], f'{save_dir}/{i}_256.jpg', normalize=True, range=(-1, 1))
 
-    def save(self, name, save_dir=MODEL_DIR):
+    def save(self, name, save_dir=MODEL_DIR, metrics=None):
         os.makedirs(save_dir, exist_ok=True)
         torch.save(self.gen.state_dict(), f'{save_dir}/{name}_generator.pt')
         torch.save(self.disc.state_dict(), f'{save_dir}/{name}_discriminator.pt')
+        if metrics is not None:
+            with open(f'{save_dir}/{name}_metrics.json', 'w') as f:
+                json.dump(metrics, f)
 
     def load_(self, name, load_dir=MODEL_DIR):
         self.gen.load_state_dict(torch.load(f'{load_dir}/{name}_generator.pt'))

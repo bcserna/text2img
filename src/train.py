@@ -1,3 +1,5 @@
+import click
+
 from src.config import DEVICE
 from src.data import CUB
 from src.damsm import DAMSM
@@ -6,20 +8,25 @@ from src.gan import AttnGAN
 from src.generator import Generator
 from src.discriminator import Discriminator, PatchDiscriminator
 
-
-def train_gan(epochs, name, gan=None, device=DEVICE):
+@click.command()
+@click.argument('epochs', type=int)
+@click.argument('name')
+@click.option('--gan', default=None)
+@click.option('--damsm', default=None)
+@click.option('--device', default=DEVICE)
+def train_gan(epochs, name, gan, damsm, device):
     cub = CUB()
-    damsm = DAMSM.load('l01992')
+    if damsm is not None:
+        damsm_model = DAMSM.load(damsm)
     if gan is None:
         generator = Generator(device)
         discriminator = Discriminator(device)
         # discriminator = PatchDiscriminator(device)
-        gan = AttnGAN(damsm, generator, discriminator, device)
+        gan = AttnGAN(damsm_model, generator, discriminator, device)
     metrics = gan.train(cub, epochs, fid_evaluator=FIDEvaluator)
-    gan.save(name)
+    gan.save(name, metrics=metrics)
     return gan, metrics
 
 
 if __name__ == '__main__':
-    import plac
-    plac.call(train_gan)
+    train_gan()
