@@ -10,6 +10,14 @@ from tqdm import tqdm
 from src.config import GAN_BATCH, DEVICE, D_Z, END_TOKEN
 
 
+def grad_norm(module, p=2):
+    total_norm = 0
+    for p in module.parameters():
+        param_norm = p.grad.data.norm(2)
+        total_norm += param_norm.item() ** 2
+    return total_norm ** 0.5
+
+
 def init_weights(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:

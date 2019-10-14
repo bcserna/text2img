@@ -12,7 +12,7 @@ from tqdm import tqdm
 from copy import deepcopy
 
 from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA, MODEL_DIR
-from src.util import rotate_tensor, init_weights
+from src.util import rotate_tensor, init_weights, grad_norm
 from src.evaluation import inception_score, frechet_inception_distance
 
 
@@ -131,10 +131,14 @@ class AttnGAN:
                     for p, avg_p in zip(self.gen.parameters(), avg_g_params):
                         p.data.copy_(avg_p)
 
-                train_pbar.set_description(f'Training (G: {avg_g_loss:05.4f}  '
-                                           f'D64: {batch_d_loss[0]:05.4f}  '
-                                           f'D128: {batch_d_loss[1]:05.4f}  '
-                                           f'D256: {batch_d_loss[2]:05.4f})')
+                # train_pbar.set_description(f'Training (G: {avg_g_loss:05.4f}  '
+                #                            f'D64: {batch_d_loss[0]:05.4f}  '
+                #                            f'D128: {batch_d_loss[1]:05.4f}  '
+                #                            f'D256: {batch_d_loss[2]:05.4f})')
+                train_pbar.set_description(f'Training (G: {grad_norm(self.gen):.2f}  '
+                                           f'D64: {grad_norm(self.disc.d64):.2f}  '
+                                           f'D128: {grad_norm(self.disc.d128):.2f}  '
+                                           f'D256: {grad_norm(self.disc.d256):.2f})')
 
             batches = len(train_loader)
 
