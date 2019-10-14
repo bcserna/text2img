@@ -1,5 +1,4 @@
 import torch
-from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
@@ -179,13 +178,13 @@ class AttnGAN:
         return metrics
 
     def sample_test_set(self, dataset, nb_samples=4, nb_captions=2, noise_variations=2):
+        sample_indices = np.random.choice(len(dataset.test), nb_samples, replace=False)
+        cap_indices = np.random.choice(10, nb_captions, replace=False)
         texts = [dataset.test.data[f'caption_{cap_idx}'].iloc[sample_idx]
-                 for sample_idx in range(nb_samples)
-                 for cap_idx in range(nb_captions)]
+                 for sample_idx in sample_indices
+                 for cap_idx in cap_indices]
 
         generated_samples = [self.generate_from_text(texts, dataset) for _ in range(noise_variations)]
-
-        # combined_img64 = torch.FloatTensor(3, nb_samples * 64, nb_captions * noise_variations * 64)
         combined_img64 = torch.FloatTensor()
         combined_img128 = torch.FloatTensor()
         combined_img256 = torch.FloatTensor()
