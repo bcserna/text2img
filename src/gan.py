@@ -13,12 +13,14 @@ from copy import deepcopy
 from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA, MODEL_DIR
 from src.util import rotate_tensor, init_weights, grad_norm
 from src.evaluation import inception_score, frechet_inception_distance
+from src.generator import Generator
+from src.discriminator import Discriminator
 
 
 class AttnGAN:
-    def __init__(self, damsm, generator, discriminator, device=DEVICE):
-        self.gen = generator.to(device)
-        self.disc = discriminator.to(device)
+    def __init__(self, damsm, device=DEVICE):
+        self.gen = Generator(device)
+        self.disc = Discriminator(device)
         self.damsm = damsm.to(device)
         self.damsm.txt_enc.eval(), self.damsm.img_enc.eval()
         self.device = device
@@ -86,7 +88,6 @@ class AttnGAN:
 
             train_pbar = tqdm(train_loader, desc='Training', leave=False, dynamic_ncols=True)
             for batch in train_pbar:
-                self.gen.zero_grad(), self.disc.zero_grad()
                 real_imgs = [batch['img64'], batch['img128'], batch['img256']]
 
                 with torch.no_grad():
@@ -197,10 +198,11 @@ class AttnGAN:
 
         return metrics
 
-    def sample_test_set(self, dataset, nb_samples=4, nb_captions=2, noise_variations=2):
-        sample_indices = np.random.choice(len(dataset.test), nb_samples, replace=False)
+    def sample_test_set(self, dataset, nb_samples=8, nb_captions=2, noise_variations=2):
+        subset = dataset.train
+        sample_indices = np.random.choice(len(subset), nb_samples, replace=False)
         cap_indices = np.random.choice(10, nb_captions, replace=False)
-        texts = [dataset.test.data[f'caption_{cap_idx}'].iloc[sample_idx]
+        texts = [subset.data[f'caption_{cap_idx}'].iloc[sample_idx]
                  for sample_idx in sample_indices
                  for cap_idx in cap_indices]
 
@@ -234,11 +236,12 @@ class AttnGAN:
         return loss
 
     def generator_step(self, generated_imgs, word_embs, sent_embs, mu, logvar, class_labels):
+        self.gen.zero_grad()
         avg_stage_g_loss = [0, 0, 0]
 
         local_features, global_features = self.damsm.img_enc(generated_imgs[-1])
         batch_size = sent_embs.size(0)
-        match_labels = torch.LongTensor(range(batch_size)).requires_grad_(False).to(self.device)
+        match_labels = torch.LongTensor(range(batch_size)).to(self.device)
 
         w1_loss, w2_loss, _ = self.damsm.words_loss(local_features, word_embs, class_labels, match_labels)
         w_loss = (w1_loss + w2_loss) * LAMBDA
@@ -254,7 +257,7 @@ class AttnGAN:
             features = d(generated_imgs[i])
             fake_logits = d.logit(features, sent_embs)
 
-            real_labels = torch.Tensor(fake_logits.size()).fill_(1).requires_grad_(False).to(self.device)
+            real_labels = torch.Tensor(fake_logits.size()).fill_(1).to(self.device)
 
             disc_error = F.binary_cross_entropy_with_logits(fake_logits, real_labels)
 
@@ -283,16 +286,14 @@ class AttnGAN:
         skipped = [0, 0, 0]
 
         for i, d in enumerate(self.discriminators):
+            d.zero_grad()
             real_features = d(real_imgs[i].to(self.device))
             fake_features = d(generated_imgs[i].detach())
 
             real_logits = d.logit(real_features, sent_embs)
 
-            real_labels = torch.Tensor(real_logits.size()).fill_(1).requires_grad_(False).to(self.device)
-            fake_labels = torch.Tensor(real_logits.size()).fill_(0).requires_grad_(False).to(self.device)
-
-            real_labels = real_labels - label_smoothing
-            # fake_labels = fake_labels + label_smoothing
+            real_labels = torch.full(real_logits.size(), 1 - label_smoothing).to(self.device)
+            fake_labels = torch.zeros(real_logits.size(), dtype=torch.float).to(self.device)
 
             flip_mask = torch.Tensor(real_labels.size()).bernoulli_(p_flip).type(torch.bool)
             real_labels[flip_mask], fake_labels[flip_mask] = fake_labels[flip_mask], real_labels[flip_mask]
@@ -370,7 +371,7 @@ class AttnGAN:
         self.gen.eval(), self.disc.eval()
 
     @staticmethod
-    def load(name, damsm, generator_type, discriminator_type, load_dir=MODEL_DIR):
-        attngan = AttnGAN(damsm, generator_type(), discriminator_type())
+    def load(name, damsm, load_dir=MODEL_DIR):
+        attngan = AttnGAN(damsm)
         attngan.load_(name, load_dir)
         return attngan
