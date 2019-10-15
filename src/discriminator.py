@@ -43,7 +43,7 @@ def conv3x3_LReLU(in_channels, out_channels):
 
 
 class DiscriminatorLogitBlock(nn.Module):
-    def __init__(self, logit_kernel, logit_stride):
+    def __init__(self, logit_kernel=4, logit_stride=4):
         super().__init__()
         self.jointConv = conv3x3_LReLU(D_DF * 8 + D_HIDDEN, D_DF * 8)
         self.logits = nn.Sequential(
