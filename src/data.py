@@ -1,9 +1,8 @@
 import random
-
+from collections import defaultdict
 import pandas as pd
 import pickle
 import re
-
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
@@ -80,13 +79,10 @@ class CUBSubset(Dataset):
 
 
 class CUB:
-    def __init__(self, min_word_freq=MIN_WORD_FREQ):
+    def __init__(self):
         print('Loading image paths ...')
         self.data = pd.read_csv('CUB_200_2011/images.txt', delim_whitespace=True, header=None, index_col=0,
                                 names=['img_path'])
-
-        print('Loading image captions, counting word frequencies, building vocab ...')
-        self.word_freq = {}
 
         for i in range(CAPTIONS):
             self.data[f'caption_{i}'] = ''
@@ -103,17 +99,6 @@ class CUB:
 
                 for j, c in enumerate(captions):
                     row[f'caption_{j}'] = c
-                    for word in c.split():
-                        self.word_freq[word] = self.word_freq.get(word, 0) + 1
-
-        self.vocab = {}
-        for word, freq in self.word_freq.items():
-            if freq > min_word_freq:
-                self.vocab[word] = len(self.vocab)
-
-        self.vocab[END_TOKEN] = len(self.vocab)
-        self.vocab[UNK_TOKEN] = len(self.vocab)
-        print(f'Vocab size:{len(self.vocab)}')
 
         print('Setting train/test split ...')
         with open('CUB_200_2011/test/filenames.pickle', 'rb') as f:
@@ -121,6 +106,15 @@ class CUB:
 
         self.data['train'] = self.data['img_path'].apply(lambda x: 0 if x[:x.index('.jpg')] in test else 1)
         self.data.sort_values(by='train', inplace=True, ascending=False)
+
+        self.word_freq_train = self.count_word_freq(self.data[self.data.train == 1])
+        self.word_freq_test = self.count_word_freq(self.data[self.data.train == 0])
+
+        self.vocab_train = self.build_vocab(self.word_freq_train)
+        self.vocab_test = self.build_vocab(self.word_freq_test)
+
+        print(f'Train vocab size: {len(self.vocab_train)}')
+        print(f'Test vocab size: {len(self.vocab_test)}')
 
         print('Loading bounding boxes ...')
         bbox = pd.read_csv('CUB_200_2011/bounding_boxes.txt', delim_whitespace=True, header=None, index_col=0,
@@ -145,10 +139,31 @@ class CUB:
                                    index_col=0, names=['class'])
         self.data = self.data.join(class_labels)
 
-        self.train = CUBSubset(self.data[self.data.train == 1], self.vocab, self.imsize, self.transforms,
+        self.train = CUBSubset(self.data[self.data.train == 1], self.vocab_train, self.imsize, self.transforms,
                                self.normalize, preload=False)
-        self.test = CUBSubset(self.data[self.data.train == 0], self.vocab, self.imsize, self.transforms,
+        self.test = CUBSubset(self.data[self.data.train == 0], self.vocab_test, self.imsize, self.transforms,
                               self.normalize, preload=True)
+
+    @staticmethod
+    def count_word_freq(df):
+        freq = defaultdict(int)
+        for i, row in df.iterrows():
+            for j in range(CAPTIONS):
+                cap = row[f'caption_{j}']
+                for w in cap.split():
+                    freq[w] += 1
+        return freq
+
+    @staticmethod
+    def build_vocab(word_freq, min_freq=MIN_WORD_FREQ, extra_tokens=[END_TOKEN, UNK_TOKEN]):
+        vocab = {}
+        for t in extra_tokens:
+            vocab[t] = len(vocab)
+
+        for w, f in word_freq.items():
+            if f >= min_freq:
+                vocab[w] = len(vocab)
+        return vocab
 
     @staticmethod
     def collate_fn(batch):
