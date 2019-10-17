@@ -6,7 +6,13 @@ from src.damsm import DAMSM
 from src.evaluation import FIDEvaluator
 from src.gan import AttnGAN
 
-@click.command()
+
+@click.group()
+def main():
+    pass
+
+
+@main.command()
 @click.argument('epochs', type=int)
 @click.argument('name')
 @click.option('--gan', default=None)
@@ -23,5 +29,18 @@ def train_gan(epochs, name, gan, damsm, device):
     return gan, metrics
 
 
+@main.command()
+@click.argument('epochs', type=int)
+@click.argument('name')
+@click.option('--patience', type=int, default=20)
+@click.option('--device', default=DEVICE)
+def train_damsm(epochs, name, patience, device):
+    cub = CUB()
+    damsm = DAMSM(len(cub.train.vocab), device=device)
+    metrics = damsm.train(cub, epochs, patience)
+    damsm.save(name)
+    return damsm, metrics
+
+
 if __name__ == '__main__':
-    train_gan()
+    main()
