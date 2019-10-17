@@ -161,8 +161,6 @@ class CUB:
             vocab[t] = len(vocab)
 
         for w, f in word_freq.items():
-            if len(w) > 10:
-                print(w)
             if f >= min_freq:
                 vocab[w] = len(vocab)
         return vocab
