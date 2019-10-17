@@ -95,7 +95,7 @@ class CUB:
             with open(f'CUB_200_2011/text/{dir}/{file}', 'r', encoding='utf-8') as f:
                 lines = f.readlines()
                 # Keep only alphanumeric characters
-                captions = [pattern.sub('', line.lower().strip()) for line in lines]
+                captions = [pattern.sub('', line.replace("\ufffd\ufffd", " ").lower().strip()) for line in lines]
 
                 for j, c in enumerate(captions):
                     row[f'caption_{j}'] = c
@@ -161,6 +161,8 @@ class CUB:
             vocab[t] = len(vocab)
 
         for w, f in word_freq.items():
+            if len(w) > 10:
+                print(w)
             if f >= min_freq:
                 vocab[w] = len(vocab)
         return vocab
