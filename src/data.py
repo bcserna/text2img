@@ -108,13 +108,13 @@ class CUB:
         self.data.sort_values(by='train', inplace=True, ascending=False)
 
         self.word_freq_train = self.count_word_freq(self.data[self.data.train == 1])
-        self.word_freq_test = self.count_word_freq(self.data[self.data.train == 0])
+        # self.word_freq_test = self.count_word_freq(self.data[self.data.train == 0])
 
         self.vocab_train = self.build_vocab(self.word_freq_train)
-        self.vocab_test = self.build_vocab(self.word_freq_test)
+        # self.vocab_test = self.build_vocab(self.word_freq_test, self.vocab_train)
 
         print(f'Train vocab size: {len(self.vocab_train)}')
-        print(f'Test vocab size: {len(self.vocab_test)}')
+        # print(f'Test vocab size: {len(self.vocab_test)}')
 
         print('Loading bounding boxes ...')
         bbox = pd.read_csv('CUB_200_2011/bounding_boxes.txt', delim_whitespace=True, header=None, index_col=0,
@@ -141,12 +141,13 @@ class CUB:
 
         self.train = CUBSubset(self.data[self.data.train == 1], self.vocab_train, self.imsize, self.transforms,
                                self.normalize, preload=False)
-        self.test = CUBSubset(self.data[self.data.train == 0], self.vocab_test, self.imsize, self.transforms,
+        self.test = CUBSubset(self.data[self.data.train == 0], self.vocab_train, self.imsize, self.transforms,
                               self.normalize, preload=True)
 
     @staticmethod
-    def count_word_freq(df):
-        freq = defaultdict(int)
+    def count_word_freq(df, freq=None):
+        if freq is None:
+            freq = defaultdict(int)
         for i, row in df.iterrows():
             for j in range(CAPTIONS):
                 cap = row[f'caption_{j}']
