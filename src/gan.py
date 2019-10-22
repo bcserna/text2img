@@ -102,6 +102,8 @@ class AttnGAN:
                 batch_d_loss, batch_real_acc, batch_fake_acc, batch_mismatched_acc, batch_uncond_real_acc, batch_uncond_fake_acc, batch_disc_skips = self.discriminator_step(
                     real_imgs, generated, sent_embs, 0.1)
 
+                d_grad_norm = [grad_norm(d) for d in self.discriminators]
+
                 d_loss += batch_d_loss
                 real_acc += batch_real_acc
                 fake_acc += batch_fake_acc
@@ -136,9 +138,9 @@ class AttnGAN:
                 #                            f'D128: {batch_d_loss[1]:05.4f}  '
                 #                            f'D256: {batch_d_loss[2]:05.4f})')
                 train_pbar.set_description(f'Training (G: {grad_norm(self.gen):.2f}  '
-                                           f'D64: {grad_norm(self.disc.d64):.2f}  '
-                                           f'D128: {grad_norm(self.disc.d128):.2f}  '
-                                           f'D256: {grad_norm(self.disc.d256):.2f})')
+                                           f'D64: {d_grad_norm[0]:.2f}  '
+                                           f'D128: {d_grad_norm[1]:.2f}  '
+                                           f'D256: {d_grad_norm[2]:.2f})')
 
             batches = len(train_loader)
 
@@ -274,7 +276,8 @@ class AttnGAN:
         return g_total, avg_stage_g_loss, w_loss.item() / batch_size, s_loss.item() / batch_size, kl_loss.item()
 
     def discriminator_step(self, real_imgs, generated_imgs, sent_embs, label_smoothing, skip_acc_threshold=0.9,
-                           p_flip=0.05, halting=False):
+                           p_flip=0.05, halting=True):
+        self.disc.zero_grad()
         batch_size = sent_embs.size(0)
 
         avg_d_loss = [0, 0, 0]
@@ -286,7 +289,6 @@ class AttnGAN:
         skipped = [0, 0, 0]
 
         for i, d in enumerate(self.discriminators):
-            d.zero_grad()
             real_features = d(real_imgs[i].to(self.device))
             fake_features = d(generated_imgs[i].detach())
 
