@@ -91,14 +91,19 @@ class CUB:
             dir, file = row['img_path'].split('/')
             file = file.replace('.jpg', '.txt')
 
+            captions = []
+            # Keep only alphanumeric characters
             pattern = re.compile(r'[^\sa-z]+')
             with open(f'CUB_200_2011/text/{dir}/{file}', 'r', encoding='utf-8') as f:
                 lines = f.readlines()
-                # Keep only alphanumeric characters
-                captions = [pattern.sub('', line.replace("\ufffd\ufffd", " ").lower().strip()) for line in lines]
+                for line in lines:
+                    line = line.replace('\ufffd\ufffd', ' ').replace(',', ' ').replace('-', ' ').lower().strip()
+                    line = ' '.join(line.split())
+                    line = pattern.sub('', line)
+                    captions.append(line)
 
-                for j, c in enumerate(captions):
-                    row[f'caption_{j}'] = c
+            for j, c in enumerate(captions):
+                row[f'caption_{j}'] = c
 
         print('Setting train/test split ...')
         with open('CUB_200_2011/test/filenames.pickle', 'rb') as f:
@@ -139,6 +144,7 @@ class CUB:
         self.test = CUBSubset(self.data[self.data.train == 0], self.vocab, self.imsize, self.transforms,
                               self.normalize, preload=True)
 
+
     @staticmethod
     def count_word_freq(df, freq=None):
         if freq is None:
@@ -150,6 +156,7 @@ class CUB:
                     freq[w] += 1
         return freq
 
+
     @staticmethod
     def build_vocab(word_freq, min_freq=MIN_WORD_FREQ, extra_tokens=[END_TOKEN, UNK_TOKEN]):
         vocab = {}
@@ -160,6 +167,7 @@ class CUB:
             if f >= min_freq:
                 vocab[w] = len(vocab)
         return vocab
+
 
     @staticmethod
     def collate_fn(batch):
