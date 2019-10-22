@@ -155,7 +155,7 @@ class DAMSM:
         with open(f'{load_dir}/{name}_config.json', 'r') as f:
             config = json.load(f)
         damsm = DAMSM(config['vocab_size'])
-        damsm.load_(name)
+        damsm.load_(name, load_dir)
         return damsm
 
     def load_(self, name, load_dir=MODEL_DIR):
