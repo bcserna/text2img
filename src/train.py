@@ -37,7 +37,7 @@ def train_gan(epochs, name, gan, damsm, device):
 def train_damsm(epochs, name, patience, device):
     cub = CUB()
     damsm = DAMSM(len(cub.train.vocab), device=device)
-    metrics = damsm.train(cub, epochs, patience)
+    metrics = damsm.train(cub, epochs, patience=patience)
     damsm.save(name)
     return damsm, metrics
 
