@@ -85,7 +85,7 @@ class DAMSM:
                     f's2: {s2_loss / batch_size:05.4f})')
 
                 avg_train_loss += loss.item()
-                loss.backward(retain_graph=True)
+                loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.txt_enc.parameters(), 0.25)
                 optim.step()
 
