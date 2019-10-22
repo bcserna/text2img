@@ -10,6 +10,12 @@ from tqdm import tqdm
 from src.config import GAN_BATCH, DEVICE, D_Z, END_TOKEN
 
 
+def freeze_params_(module):
+    for param in module.parameters():
+        param.requires_grad = False
+    return module
+
+
 def grad_norm(module, p=2):
     total_norm = 0
     for p in module.parameters():

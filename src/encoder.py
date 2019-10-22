@@ -5,7 +5,7 @@ import torchvision
 import warnings
 
 from src.config import D_HIDDEN, P_DROP, D_WORD, IMG_WEIGHT_INIT_RANGE, DEVICE
-from src.util import conv1x1, count_params
+from src.util import conv1x1, count_params, freeze_params_
 
 
 class TextEncoder(nn.Module):
@@ -51,8 +51,7 @@ class ImageEncoder(nn.Module):
         self.device = device
         self.inception_model = torchvision.models.inception_v3(pretrained=True).to(self.device).eval()
         # Freeze Inception V3 parameters
-        for param in self.inception_model.parameters():
-            param.requires_grad = False
+        freeze_params_(self.inception_model)
         # 768: the dimension of mixed_6e layer's sub-regions (768 x 289 [number of sub-regions, 17 x 17])
         self.local_proj = conv1x1(768, D_HIDDEN).to(self.device)
         # 2048: the dimension of last average pool's output

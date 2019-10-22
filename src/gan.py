@@ -11,7 +11,7 @@ from tqdm import tqdm
 from copy import deepcopy
 
 from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA, MODEL_DIR
-from src.util import rotate_tensor, init_weights, grad_norm
+from src.util import rotate_tensor, init_weights, grad_norm, freeze_params_
 from src.evaluation import inception_score, frechet_inception_distance
 from src.generator import Generator
 from src.discriminator import Discriminator
@@ -23,6 +23,8 @@ class AttnGAN:
         self.disc = Discriminator(device)
         self.damsm = damsm.to(device)
         self.damsm.txt_enc.eval(), self.damsm.img_enc.eval()
+        freeze_params_(self.damsm.txt_enc), freeze_params_(self.damsm.img_enc)
+
         self.device = device
         self.gen.apply(init_weights), self.disc.apply(init_weights)
 
