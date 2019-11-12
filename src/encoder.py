@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 import torchvision
 import warnings
 
@@ -24,17 +25,26 @@ class TextEncoder(nn.Module):
                 dropout=P_DROP,
                 bidirectional=True).to(self.device)
         # Initial cell and hidden state for each sequence
-        self.hidden0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(self.device)
-        self.cell0 = nn.Parameter(torch.randn(D_HIDDEN // 2), requires_grad=True).to(self.device)
+        hidden0_weights = torch.randn(D_HIDDEN // 2)
+        self.hidden0 = nn.Parameter(hidden0_weights.to(self.device), requires_grad=True)
+        cell0_weights = torch.randn(D_HIDDEN // 2)
+        self.cell0 = nn.Parameter(cell0_weights.to(self.device), requires_grad=True)
 
         p_trainable, p_non_trainable = count_params(self)
         print(f'Text encoder params: trainable {p_trainable} - non_trainable {p_non_trainable}')
 
-    def forward(self, x):
+    def init_hidden(self, bsz):
+        weight = next(self.parameters()).data
+
+        return (Variable(weight.new(2, bsz, D_HIDDEN // 2).zero_()),
+                Variable(weight.new(2, bsz, D_HIDDEN // 2).zero_()))
+
+    def forward(self, x, *args, **kwargs):
         batch_size = len(x)
         init_hidden = self.hidden0.repeat(2, batch_size, 1).to(self.device)
         init_cell = self.cell0.repeat(2, batch_size, 1).to(self.device)
         init_state = (init_hidden, init_cell)
+        # init_state = self.init_hidden(batch_size)
 
         e = self.embed(torch.tensor(x, dtype=torch.int64).to(self.device))
         e = self.emb_dropout(e)
