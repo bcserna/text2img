@@ -278,7 +278,7 @@ class AttnGAN:
         return g_total, avg_stage_g_loss, w_loss.item() / batch_size, s_loss.item() / batch_size, kl_loss.item()
 
     def discriminator_step(self, real_imgs, generated_imgs, sent_embs, label_smoothing, skip_acc_threshold=0.9,
-                           p_flip=0.05, halting=True):
+                           p_flip=0.05, halting=False):
         self.disc.zero_grad()
         batch_size = sent_embs.size(0)
 
@@ -296,11 +296,12 @@ class AttnGAN:
 
             real_logits = d.logit(real_features, sent_embs)
 
-            real_labels = torch.full(real_logits.size(), 1 - label_smoothing).to(self.device)
+            # real_labels = torch.full(real_logits.size(), 1 - label_smoothing).to(self.device)
+            real_labels = torch.ones(real_logits.size(), dtype=torch.float).to(self.device)
             fake_labels = torch.zeros(real_logits.size(), dtype=torch.float).to(self.device)
 
-            flip_mask = torch.Tensor(real_labels.size()).bernoulli_(p_flip).type(torch.bool)
-            real_labels[flip_mask], fake_labels[flip_mask] = fake_labels[flip_mask], real_labels[flip_mask]
+            # flip_mask = torch.Tensor(real_labels.size()).bernoulli_(p_flip).type(torch.bool)
+            # real_labels[flip_mask], fake_labels[flip_mask] = fake_labels[flip_mask], real_labels[flip_mask]
 
             real_error = F.binary_cross_entropy_with_logits(real_logits, real_labels)
             # Real images should be classified as real
