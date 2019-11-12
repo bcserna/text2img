@@ -1,6 +1,6 @@
 D_GF = 32
 D_DF = 64
-D_WORD = 256
+D_WORD = 300
 D_HIDDEN = 256
 D_Z = 100
 D_COND = 100
@@ -36,6 +36,6 @@ GAMMA_2 = 5.0
 GAMMA_3 = 10.0
 LAMBDA = 5.0
 
-MIN_WORD_FREQ = 3
+MIN_WORD_FREQ = 1
 
 MODEL_DIR = 'models'
