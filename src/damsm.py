@@ -151,10 +151,10 @@ class DAMSM:
         os.remove(f'{save_dir}/{name}_config.json')
 
     @staticmethod
-    def load(name, load_dir=MODEL_DIR):
+    def load(name, load_dir=MODEL_DIR, device=DEVICE):
         with open(f'{load_dir}/{name}_config.json', 'r') as f:
             config = json.load(f)
-        damsm = DAMSM(config['vocab_size'])
+        damsm = DAMSM(config['vocab_size'], device=device)
         damsm.load_(name, load_dir)
         return damsm
 

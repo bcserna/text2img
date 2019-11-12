@@ -21,7 +21,7 @@ def main():
 def train_gan(epochs, name, gan, damsm, device):
     cub = CUB()
     if damsm is not None:
-        damsm_model = DAMSM.load(damsm)
+        damsm_model = DAMSM.load(damsm, device=device)
     if gan is None:
         gan = AttnGAN(damsm_model, device)
     metrics = gan.train(cub, epochs, fid_evaluator=FIDEvaluator)
