@@ -174,7 +174,7 @@ class AttnGAN:
                 # texts = [dataset.test.data['caption_0'].iloc[sample_idx] for sample_idx in range(2)]
                 # generated_samples = self.generate_from_text(texts, dataset)
                 generated_samples = [resolution.unsqueeze(0) for resolution in self.sample_test_set(dataset)]
-                self._save_generated(generated_samples, e, start_time)
+                self._save_generated(generated_samples, e, f'{OUT_DIR}/{start_time}')
 
                 # inc_score = inception_score(self, dataset, self.damsm.img_enc.inception_model, batch_size,
                 #                             device=self.device)
@@ -261,7 +261,7 @@ class AttnGAN:
             features = d(generated_imgs[i])
             fake_logits = d.logit(features, sent_embs)
 
-            real_labels = torch.Tensor(fake_logits.size()).fill_(1).to(self.device)
+            real_labels = torch.ones_like(fake_logits).to(self.device)
 
             disc_error = F.binary_cross_entropy_with_logits(fake_logits, real_labels)
 
@@ -297,8 +297,8 @@ class AttnGAN:
             real_logits = d.logit(real_features, sent_embs)
 
             # real_labels = torch.full(real_logits.size(), 1 - label_smoothing).to(self.device)
-            real_labels = torch.ones(real_logits.size(), dtype=torch.float).to(self.device)
-            fake_labels = torch.zeros(real_logits.size(), dtype=torch.float).to(self.device)
+            real_labels = torch.ones_like(real_logits, dtype=torch.float).to(self.device)
+            fake_labels = torch.zeros_like(real_logits, dtype=torch.float).to(self.device)
 
             # flip_mask = torch.Tensor(real_labels.size()).bernoulli_(p_flip).type(torch.bool)
             # real_labels[flip_mask], fake_labels[flip_mask] = fake_labels[flip_mask], real_labels[flip_mask]
@@ -352,9 +352,9 @@ class AttnGAN:
             generated, att, mu, logvar = self.gen(noise, s_emb, w_emb, attn_mask)
         return generated
 
-    def _save_generated(self, generated, epoch, dir):
+    def _save_generated(self, generated, epoch, out_dir=OUT_DIR):
         nb_samples = generated[0].size(0)
-        save_dir = f'{dir}/epoch_{epoch:03}'
+        save_dir = f'{out_dir}/epoch_{epoch:03}'
         os.makedirs(save_dir)
 
         for i in range(nb_samples):
