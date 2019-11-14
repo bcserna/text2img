@@ -43,25 +43,39 @@ def conv3x3_LReLU(in_channels, out_channels):
 
 
 class DiscriminatorLogitBlock(nn.Module):
-    def __init__(self, logit_kernel=4, logit_stride=4):
+    def __init__(self):
         super().__init__()
-        self.jointConv = conv3x3_LReLU(D_DF * 8 + D_HIDDEN, D_DF * 8)
-        self.logits = nn.Sequential(
-            nn.Conv2d(D_DF * 8, 1, kernel_size=logit_kernel, stride=logit_stride),
-            # nn.Sigmoid()
-        )
+        self.cond_logit = CondLogitBlock()
+        self.uncond_logit = LogitBlock()
 
     def forward(self, h, condition=None):
         if condition is not None:
-            condition = condition.view(-1, D_HIDDEN, 1, 1)
-            condition = condition.repeat(1, 1, h.size(-2), h.size(-1))
-            conditioned_h = torch.cat((h, condition), 1)
-            conditioned_h = self.jointConv(conditioned_h)
-        else:
-            conditioned_h = h
+            return self.cond_logit(h, condition)
+        return self.uncond_logit(h)
 
-        logits = self.logits(conditioned_h)
+
+class CondLogitBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.joint_conv = conv3x3_LReLU(D_DF * 8 + D_HIDDEN, D_DF * 8)
+        self.logit = LogitBlock()
+
+    def forward(self, h, cond):
+        cond = cond.view(-1, D_HIDDEN, 1, 1)
+        cond = cond.repeat(1, 1, h.size(-2), h.size(-1))
+        cond_h = torch.cat((h, cond), 1)
+        cond_h = self.jointConv(cond_h)
+        logits = self.logit(cond_h)
         return logits
+
+
+class LogitBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.logits = nn.Conv2d(D_DF * 8, 1, kernel_size=logit_kernel, stride=logit_stride)
+
+    def forward(self, h):
+        return self.logits(h)
 
 
 class Discriminator64(nn.Module):
