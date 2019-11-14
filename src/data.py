@@ -143,7 +143,7 @@ class CUB:
         self.train = CUBSubset(self.data[self.data.train == 1], self.vocab, self.imsize, self.transforms,
                                self.normalize, preload=False)
         self.test = CUBSubset(self.data[self.data.train == 0], self.vocab, self.imsize, self.transforms,
-                              self.normalize, preload=True)
+                              self.normalize, preload=False)
 
     @staticmethod
     def count_word_freq(df, freq=None):
