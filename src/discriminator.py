@@ -64,7 +64,7 @@ class CondLogitBlock(nn.Module):
         cond = cond.view(-1, D_HIDDEN, 1, 1)
         cond = cond.repeat(1, 1, h.size(-2), h.size(-1))
         cond_h = torch.cat((h, cond), 1)
-        cond_h = self.jointConv(cond_h)
+        cond_h = self.joint_conv(cond_h)
         logits = self.logit(cond_h)
         return logits
 
@@ -72,7 +72,7 @@ class CondLogitBlock(nn.Module):
 class LogitBlock(nn.Module):
     def __init__(self):
         super().__init__()
-        self.logits = nn.Conv2d(D_DF * 8, 1, kernel_size=logit_kernel, stride=logit_stride)
+        self.logits = nn.Conv2d(D_DF * 8, 1, kernel_size=4, stride=4)
 
     def forward(self, h):
         return self.logits(h)
@@ -82,7 +82,7 @@ class Discriminator64(nn.Module):
     def __init__(self):
         super().__init__()
         self.encoder = downscale16_encoder_block()
-        self.logit = DiscriminatorLogitBlock(4, 4)
+        self.logit = DiscriminatorLogitBlock()
 
         p_trainable, p_non_trainable = count_params(self)
         print(f'Discriminator64 params: trainable {p_trainable} - non_trainable {p_non_trainable}')
@@ -97,7 +97,7 @@ class Discriminator128(nn.Module):
         self.downscale_encoder_16 = downscale16_encoder_block()
         self.downscale_encoder_32 = downscale2_encoder_block(D_DF * 8, D_DF * 16)
         self.encoder32 = conv3x3_LReLU(D_DF * 16, D_DF * 8)
-        self.logit = DiscriminatorLogitBlock(4, 4)
+        self.logit = DiscriminatorLogitBlock()
 
         p_trainable, p_non_trainable = count_params(self)
         print(f'Discriminator128 params: trainable {p_trainable} - non_trainable {p_non_trainable}')
@@ -117,7 +117,7 @@ class Discriminator256(nn.Module):
         self.downscale_encoder_64 = downscale2_encoder_block(D_DF * 16, D_DF * 32)
         self.encoder64 = conv3x3_LReLU(D_DF * 32, D_DF * 16)
         self.encoder64_2 = conv3x3_LReLU(D_DF * 16, D_DF * 8)
-        self.logit = DiscriminatorLogitBlock(4, 4)
+        self.logit = DiscriminatorLogitBlock()
 
         p_trainable, p_non_trainable = count_params(self)
         print(f'Discriminator256 params: trainable {p_trainable} - non_trainable {p_non_trainable}')
