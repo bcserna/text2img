@@ -3,7 +3,7 @@ import click
 from src.config import DEVICE
 from src.data import CUB
 from src.damsm import DAMSM
-from src.evaluation import FIDEvaluator
+from src.evaluation import FIDEvaluator, IS_FID_Evaluator
 from src.gan import AttnGAN
 
 
@@ -24,7 +24,7 @@ def train_gan(epochs, name, gan, damsm, device):
         damsm_model = DAMSM.load(damsm, device=device)
     if gan is None:
         gan = AttnGAN(damsm_model, device)
-    metrics = gan.train(cub, epochs, fid_evaluator=FIDEvaluator)
+    metrics = gan.train(cub, epochs, evaluator=IS_FID_Evaluator)
     gan.save(name, metrics=metrics)
     return gan, metrics
 
