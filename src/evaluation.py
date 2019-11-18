@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from scipy import linalg
 from scipy.stats import entropy
-from itertools import cycle
+from itertools import cycle, chain, repeat
 from tqdm import tqdm
 
 from src.config import GAN_BATCH, DEVICE, END_TOKEN, D_Z
@@ -40,33 +40,6 @@ def activation_statistics(inception_model, imgs, batch_size=32, device=DEVICE):
         mu = np.mean(activations, axis=0)
         sig = np.cov(activations, rowvar=False)
         return mu, sig
-
-
-class FIDEvaluator:
-    def __init__(self, dataset, inception_model, batch_size=GAN_BATCH, device=DEVICE):
-        self.dataset = dataset
-        self.inception_model = inception_model
-        self.batch_size = batch_size
-        self.device = device
-        real_imgs = [imgs[-1] for imgs, cap, label in self.dataset.test]
-        self.mu_real, self.sig_real = activation_statistics(inception_model, real_imgs, self.batch_size, self.device)
-
-    def evaluate(self, model):
-        nb_samples = len(self.dataset.test)
-        fake_imgs = generate_test_samples(model, self.dataset, nb_samples, self.batch_size, self.device)
-        mu_fake, sig_fake = activation_statistics(self.inception_model, fake_imgs, self.batch_size, self.device)
-        return frechet_dist(self.mu_real, self.sig_real, mu_fake, sig_fake)
-
-
-def frechet_inception_distance(model, dataset, inception_model, batch_size=GAN_BATCH, device=DEVICE):
-    nb_samples = len(dataset.train)
-    real_imgs = [imgs[-1] for imgs, cap, label in
-                 tqdm(dataset.train, desc='Loading training images', leave=False, dynamic_ncols=True)]
-    fake_imgs = generate_test_samples(model, dataset, nb_samples, batch_size, device)
-    mu_real, sig_real = activation_statistics(inception_model, real_imgs, batch_size, device)
-    mu_fake, sig_fake = activation_statistics(inception_model, fake_imgs, batch_size, device)
-
-    return frechet_dist(mu_real, sig_real, mu_fake, sig_fake)
 
 
 def embed_captions(captions, encoder, dataset, device=DEVICE):
@@ -161,35 +134,76 @@ def frechet_dist(mu1, sigma1, mu2, sigma2, eps=1e-6):
             np.trace(sigma2) - 2 * tr_covmean)
 
 
-def inception_score(gan, dataset, inception_model, batch_size=GAN_BATCH, samples=50000, splits=10, device=DEVICE):
-    training = gan.gen.training
-    with torch.no_grad():
-        gan.gen.eval()
-        generated = generate_test_samples(gan, dataset, samples, batch_size, device)
-        loader = DataLoader(generated, batch_size=batch_size, drop_last=False, shuffle=False)
-        inception_preds = np.zeros((samples, 1000), dtype=np.float32)
-        preds = 0
-        for x in tqdm(loader, desc='Computing inception score', leave=False, dynamic_ncols=True):
-            x = F.interpolate(torch.FloatTensor(x).to(device), size=(299, 299), mode='bilinear',
-                              align_corners=False)
-            x = inception_model(x)
-            x = F.softmax(x, dim=-1).data.cpu().numpy()
+class IS_FID_Evaluator:
+    def __init__(self, dataset, inception_model, batch_size=GAN_BATCH, device=DEVICE, nb_samples=30000):
+        self.dataset = dataset
+        self.inception = inception_model
+        self.batch_size = batch_size
+        self.device = device
+        self.nb_samples = nb_samples
+        augmentation_variations = 3
+        real_imgs = [imgs[-1] for imgs, cap, label in
+                     chain.from_iterable(repeat(self.dataset.test, augmentation_variations))]
+        self.mu_real, self.sig_real = activation_statistics(inception_model, real_imgs, self.batch_size, self.device)
 
-            l = len(x)
-            inception_preds[preds:preds + l] = x
-            preds += l
+    def evaluate(self, model):
+        training = model.gen.training
+        with torch.no_grad():
+            model.gen.eval()
+            generated = generate_test_samples(model, self.dataset, batch_size=self.batch_size,
+                                              n_samples=self.nb_samples)
+            loader = DataLoader(generated, batch_size=self.batch_size, drop_last=False, shuffle=False)
+            hook = InceptionFrechetActivationHook(self.inception)
 
-        scores = []
-        split_size = samples // splits
-        for s in range(splits):
-            split_scores = []
+            nb_preds = 0
+            preds = np.zeros((self.nb_samples, 1000), dtype=np.float32)
+            activations = np.zeros((self.nb_samples, 2048), dtype=np.float32)
 
-            split = inception_preds[s * split_size: (s + 1) * split_size]
-            p_y = np.mean(split, axis=0)
-            for sample_pred in split:
-                split_scores.append(entropy(sample_pred, p_y))
+            for i, batch in enumerate(
+                    tqdm(loader, desc='Computing IS and FID', dynamic_ncols=True, leave=False)):
+                l = len(batch)
 
-            scores.append(np.exp(np.mean(split_scores)))
+                # IS
+                x = F.interpolate(torch.FloatTensor(batch).to(self.device), size=(299, 299), mode='bilinear',
+                                  align_corners=False)
+                x = self.inception(x)
+                x = F.softmax(x, dim=-1).data.cpu().numpy()
 
-        gan.gen.train(mode=training)
-        return np.mean(scores), np.std(scores)
+                preds[nb_preds:nb_preds + l] = x
+
+                # FID
+                x = hook.out
+                x = F.adaptive_avg_pool2d(x, (1, 1))
+                x = torch.flatten(x, 1)
+                x = x.data.cpu().numpy()
+                activations[nb_preds:nb_preds + l] = x
+
+                nb_preds += l
+
+            # IS
+            is_scores = []
+            splits = 10
+            split_size = self.nb_samples // splits
+            for s in range(splits):
+                split_scores = []
+
+                split = preds[s * split_size: (s + 1) * split_size]
+                p_y = np.mean(split, axis=0)
+                for sample_pred in split:
+                    split_scores.append(entropy(sample_pred, p_y))
+
+                is_scores.append(np.exp(np.mean(split_scores)))
+
+            is_mean = np.mean(is_scores)
+            # is_std = np.std(is_scores)
+
+            # FID
+            mu_fake = np.mean(activations, axis=0)
+            sig_fake = np.cov(activations, rowvar=False)
+            fid = frechet_dist(self.mu_real, self.sig_real, mu_fake, sig_fake)
+
+        model.gen.train(mode=training)
+        return {
+            'IS': is_mean,
+            'FID': fid
+        }
