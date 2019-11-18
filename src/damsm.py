@@ -1,5 +1,5 @@
 import json
-
+import pickle
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -136,13 +136,17 @@ class DAMSM:
         loss = w1_loss + w2_loss + s1_loss + s2_loss
         return loss, w1_loss, w2_loss, s1_loss, s2_loss
 
-    def save(self, name, save_dir=MODEL_DIR):
+    def save(self, name, save_dir=MODEL_DIR, metrics=None):
         os.makedirs(save_dir, exist_ok=True)
         torch.save(self.txt_enc.state_dict(), f'{save_dir}/{name}_text_enc.pt')
         torch.save(self.img_enc.state_dict(), f'{save_dir}/{name}_img_enc.pt')
         config = {'vocab_size': self.txt_enc.vocab_size}
         with open(f'{save_dir}/{name}_config.json', 'w') as f:
             json.dump(config, f)
+
+        if metrics is not None:
+            with open(f'{save_dir}/{name}_metrics.pkl', 'w') as f:
+                pickle.dump(metrics, f)
 
     @staticmethod
     def remove_previous_best(name, save_dir=MODEL_DIR):
