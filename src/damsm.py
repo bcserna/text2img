@@ -12,6 +12,7 @@ from tqdm import tqdm
 from src.attention import func_attention
 from src.config import GAMMA_3, BATCH, GAMMA_1, CAP_MAX_LEN, GAMMA_2, DEVICE, DAMSM_LR, MODEL_DIR
 from src.encoder import ImageEncoder, TextEncoder
+from src.util import pre_json_metrics
 
 
 def cos_sim(x1, x2, dim=1, eps=1e-8):
@@ -145,8 +146,9 @@ class DAMSM:
             json.dump(config, f)
 
         if metrics is not None:
-            with open(f'{save_dir}/{name}_metrics.pkl', 'w') as f:
-                pickle.dump(metrics, f)
+            with open(f'{save_dir}/{name}_metrics.json', 'w') as f:
+                metrics = pre_json_metrics(metrics)
+                json.dumps(metrics, f)
 
     @staticmethod
     def remove_previous_best(name, save_dir=MODEL_DIR):
