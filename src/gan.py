@@ -10,7 +10,7 @@ import os
 from tqdm import tqdm
 from copy import deepcopy
 
-from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA, MODEL_DIR, OUT_DIR
+from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA, GAN_MODEL_DIR, OUT_DIR
 from src.util import rotate_tensor, init_weights, grad_norm, freeze_params_, pre_json_metrics
 from src.generator import Generator
 from src.discriminator import Discriminator
@@ -356,7 +356,7 @@ class AttnGAN:
             save_image(generated[1][i], f'{save_dir}/{i}_128.jpg', normalize=True, range=(-1, 1))
             save_image(generated[2][i], f'{save_dir}/{i}_256.jpg', normalize=True, range=(-1, 1))
 
-    def save(self, name, save_dir=MODEL_DIR, metrics=None):
+    def save(self, name, save_dir=GAN_MODEL_DIR, metrics=None):
         os.makedirs(save_dir, exist_ok=True)
         torch.save(self.gen.state_dict(), f'{save_dir}/{name}_generator.pt')
         torch.save(self.disc.state_dict(), f'{save_dir}/{name}_discriminator.pt')
@@ -365,13 +365,13 @@ class AttnGAN:
                 metrics = pre_json_metrics(metrics)
                 json.dump(metrics, f)
 
-    def load_(self, name, load_dir=MODEL_DIR):
+    def load_(self, name, load_dir=GAN_MODEL_DIR):
         self.gen.load_state_dict(torch.load(f'{load_dir}/{name}_generator.pt'))
         self.disc.load_state_dict(torch.load(f'{load_dir}/{name}_discriminator.pt'))
         self.gen.eval(), self.disc.eval()
 
     @staticmethod
-    def load(name, damsm, load_dir=MODEL_DIR):
+    def load(name, damsm, load_dir=GAN_MODEL_DIR):
         attngan = AttnGAN(damsm)
         attngan.load_(name, load_dir)
         return attngan

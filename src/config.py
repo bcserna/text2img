@@ -39,4 +39,6 @@ LAMBDA = 5.0
 MIN_WORD_FREQ = 1
 
 MODEL_DIR = 'models'
+DAMSM_MODEL_DIR = MODEL_DIR + '/damsm'
+GAN_MODEL_DIR = MODEL_DIR + '/gan'
 OUT_DIR = 'output'

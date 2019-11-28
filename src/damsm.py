@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src.attention import func_attention
-from src.config import GAMMA_3, BATCH, GAMMA_1, CAP_MAX_LEN, GAMMA_2, DEVICE, DAMSM_LR, MODEL_DIR
+from src.config import GAMMA_3, BATCH, GAMMA_1, CAP_MAX_LEN, GAMMA_2, DEVICE, DAMSM_LR, DAMSM_MODEL_DIR
 from src.encoder import ImageEncoder, TextEncoder
 from src.util import pre_json_metrics
 
@@ -137,7 +137,7 @@ class DAMSM:
         loss = w1_loss + w2_loss + s1_loss + s2_loss
         return loss, w1_loss, w2_loss, s1_loss, s2_loss
 
-    def save(self, name, save_dir=MODEL_DIR, metrics=None):
+    def save(self, name, save_dir=DAMSM_MODEL_DIR, metrics=None):
         os.makedirs(save_dir, exist_ok=True)
         torch.save(self.txt_enc.state_dict(), f'{save_dir}/{name}_text_enc.pt')
         torch.save(self.img_enc.state_dict(), f'{save_dir}/{name}_img_enc.pt')
@@ -151,20 +151,20 @@ class DAMSM:
                 json.dumps(metrics, f)
 
     @staticmethod
-    def remove_previous_best(name, save_dir=MODEL_DIR):
+    def remove_previous_best(name, save_dir=DAMSM_MODEL_DIR):
         os.remove(f'{save_dir}/{name}_text_enc.pt')
         os.remove(f'{save_dir}/{name}_img_enc.pt')
         os.remove(f'{save_dir}/{name}_config.json')
 
     @staticmethod
-    def load(name, load_dir=MODEL_DIR, device=DEVICE):
+    def load(name, load_dir=DAMSM_MODEL_DIR, device=DEVICE):
         with open(f'{load_dir}/{name}_config.json', 'r') as f:
             config = json.load(f)
         damsm = DAMSM(config['vocab_size'], device=device)
         damsm.load_(name, load_dir)
         return damsm
 
-    def load_(self, name, load_dir=MODEL_DIR):
+    def load_(self, name, load_dir=DAMSM_MODEL_DIR):
         self.txt_enc.load_state_dict(torch.load(f'{load_dir}/{name}_text_enc.pt'))
         self.img_enc.load_state_dict(torch.load(f'{load_dir}/{name}_img_enc.pt'))
         self.txt_enc.eval(), self.img_enc.eval()
