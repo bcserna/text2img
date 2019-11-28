@@ -87,3 +87,15 @@ def residual_block(channels):
         conv3x3(channels, channels),
         nn.BatchNorm2d(channels)
     )
+
+
+def pre_json_metrics(d):
+    for k, v in d.items():
+        if isinstance(v, dict):
+            d[k] = pre_json_metrics(v)
+        elif hasattr(v, 'tolist'):
+            d[k] = v.tolist()
+        elif isinstance(v, list) and hasattr(v[0], 'tolist'):
+            d[k] = [x.tolist() for x in v]
+
+    return d

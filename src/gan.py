@@ -1,5 +1,5 @@
 import json
-
+import pickle
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -10,9 +10,8 @@ import os
 from tqdm import tqdm
 from copy import deepcopy
 
-from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA, MODEL_DIR
-from src.util import rotate_tensor, init_weights, grad_norm, freeze_params_
-from src.evaluation import inception_score, frechet_inception_distance
+from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA, MODEL_DIR, OUT_DIR
+from src.util import rotate_tensor, init_weights, grad_norm, freeze_params_, pre_json_metrics
 from src.generator import Generator
 from src.discriminator import Discriminator
 
@@ -38,9 +37,9 @@ class AttnGAN:
                                                  betas=(0.5, 0.999))
                                 for d in self.discriminators]
 
-    def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=3, hist_avg=True, fid_evaluator=None):
+    def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=5, hist_avg=True, evaluator=None):
         start_time = time.strftime("%Y-%m-%d-%H-%M", time.gmtime())
-        os.makedirs(start_time)
+        os.makedirs(f'{OUT_DIR}/{start_time}')
 
         if hist_avg:
             avg_g_params = deepcopy(list(p.data for p in self.gen.parameters()))
@@ -54,6 +53,7 @@ class AttnGAN:
         train_loader = DataLoader(dataset.train, **loader_config)
 
         metrics = {
+            'IS': [],
             'FID': [],
             'loss': {
                 'g': [],
@@ -68,8 +68,8 @@ class AttnGAN:
             }
         }
 
-        if fid_evaluator is not None:
-            fid = fid_evaluator(dataset, self.damsm.img_enc.inception_model, batch_size, self.device)
+        if evaluator is not None:
+            evaluator = evaluator(dataset, self.damsm.img_enc.inception_model, batch_size, self.device)
 
         noise = torch.FloatTensor(batch_size, D_Z).to(self.device)
         gen_updates = 0
@@ -130,10 +130,10 @@ class AttnGAN:
                     for p, avg_p in zip(self.gen.parameters(), avg_g_params):
                         avg_p.mul_(0.999).add_(0.001, p.data)
 
-                if gen_updates % 1000 == 0:
-                    tqdm.write('Replacing generator weights with their moving average')
-                    for p, avg_p in zip(self.gen.parameters(), avg_g_params):
-                        p.data.copy_(avg_p)
+                    if gen_updates % 1000 == 0:
+                        tqdm.write('Replacing generator weights with their moving average')
+                        for p, avg_p in zip(self.gen.parameters(), avg_g_params):
+                            p.data.copy_(avg_p)
 
                 # train_pbar.set_description(f'Training (G: {avg_g_loss:05.4f}  '
                 #                            f'D64: {batch_d_loss[0]:05.4f}  '
@@ -171,20 +171,14 @@ class AttnGAN:
 
             if e % test_sample_every == 0:
                 self.gen.eval()
-                # texts = [dataset.test.data['caption_0'].iloc[sample_idx] for sample_idx in range(2)]
-                # generated_samples = self.generate_from_text(texts, dataset)
                 generated_samples = [resolution.unsqueeze(0) for resolution in self.sample_test_set(dataset)]
                 self._save_generated(generated_samples, e, f'{OUT_DIR}/{start_time}')
 
-                # inc_score = inception_score(self, dataset, self.damsm.img_enc.inception_model, batch_size,
-                #                             device=self.device)
-                # metrics['inception'].append(inc_score)
-                # tqdm.write(f'Inception score: {inc_score[0]:02.2f} +- {inc_score[1]:02.2f}')
-
-                if fid_evaluator is not None:
-                    fid_score = fid.evaluate(self)
-                    metrics['FID'].append(fid_score)
-                    tqdm.write(f'FID: {fid_score:.2f}')
+                if evaluator is not None:
+                    scores = evaluator.evaluate(self)
+                    for k, v in scores.items():
+                        metrics[k].append(v)
+                        tqdm.write(f'{k}: {v:.2f}')
 
             tqdm.write(f'Generator avg loss: total({g_loss:.3f})  '
                        f'stage0({g_stage_loss[0]:.3f})  stage1({g_stage_loss[1]:.3f})  stage2({g_stage_loss[2]:.3f})  '
@@ -203,7 +197,7 @@ class AttnGAN:
         return metrics
 
     def sample_test_set(self, dataset, nb_samples=8, nb_captions=2, noise_variations=2):
-        subset = dataset.train
+        subset = dataset.test
         sample_indices = np.random.choice(len(subset), nb_samples, replace=False)
         cap_indices = np.random.choice(10, nb_captions, replace=False)
         texts = [subset.data[f'caption_{cap_idx}'].iloc[sample_idx]
@@ -296,8 +290,8 @@ class AttnGAN:
 
             real_logits = d.logit(real_features, sent_embs)
 
-            # real_labels = torch.full(real_logits.size(), 1 - label_smoothing).to(self.device)
-            real_labels = torch.ones_like(real_logits, dtype=torch.float).to(self.device)
+            # real_labels = torch.ones_like(real_logits, dtype=torch.float).to(self.device)
+            real_labels = torch.full_like(real_logits, 1 - label_smoothing).to(self.device)
             fake_labels = torch.zeros_like(real_logits, dtype=torch.float).to(self.device)
 
             # flip_mask = torch.Tensor(real_labels.size()).bernoulli_(p_flip).type(torch.bool)
@@ -368,6 +362,7 @@ class AttnGAN:
         torch.save(self.disc.state_dict(), f'{save_dir}/{name}_discriminator.pt')
         if metrics is not None:
             with open(f'{save_dir}/{name}_metrics.json', 'w') as f:
+                metrics = pre_json_metrics(metrics)
                 json.dump(metrics, f)
 
     def load_(self, name, load_dir=MODEL_DIR):
@@ -380,3 +375,24 @@ class AttnGAN:
         attngan = AttnGAN(damsm)
         attngan.load_(name, load_dir)
         return attngan
+
+    def validate_test_set(self, dataset, batch_size=GAN_BATCH, save_dir=f'{OUT_DIR}/test_samples'):
+        os.makedirs(save_dir, exist_ok=True)
+
+        loader = DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=False,
+                            collate_fn=dataset.collate_fn)
+        loader = tqdm(loader, dynamic_ncols=True, leave=True, desc='Generating samples for test set')
+
+        self.gen.eval()
+        with torch.no_grad():
+            i = 0
+            for batch in loader:
+                word_embs, sent_embs = self.damsm.txt_enc(batch['caption'])
+                attn_mask = torch.tensor(batch['caption']).to(self.device) == dataset.vocab[END_TOKEN]
+                noise = torch.FloatTensor(len(batch['caption']), D_Z).to(self.device)
+                noise.data.normal_(0, 1)
+                generated, att, mu, logvar = self.gen(noise, sent_embs, word_embs, attn_mask)
+
+                for img in generated[-1]:
+                    save_image(img, f'{save_dir}/{i}.jpg', normalize=True, range=(-1, 1))
+                    i += 1
