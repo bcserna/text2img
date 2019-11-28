@@ -49,17 +49,14 @@ def embed_captions(captions, encoder, dataset, device=DEVICE):
     return word_embs, sent_embs, attn_mask
 
 
-def generate_test_samples(model, dataset, n_samples, batch_size=GAN_BATCH, device=DEVICE):
+def generate_n_test_samples(model, dataset, n_samples, batch_size=GAN_BATCH, device=DEVICE):
     with torch.no_grad():
         model.gen.eval()
         loader = cycle(DataLoader(dataset.test, batch_size=batch_size, shuffle=True, drop_last=False,
                                   collate_fn=dataset.collate_fn))
         generated_samples = np.zeros((n_samples, 3, 256, 256), dtype=np.float32)
         nb_generated = 0
-        pbar = tqdm(loader, desc='Generating samples', dynamic_ncols=True, leave=False,
-                    total=n_samples
-                    # total=math.ceil(n_samples / batch_size)
-                    )
+        pbar = tqdm(loader, desc='Generating samples', dynamic_ncols=True, leave=False, total=n_samples)
         for batch in loader:
             word_embs, sent_embs, attn_mask = embed_captions(batch['caption'], model.damsm.txt_enc, dataset, device)
             l = sent_embs.size(0)
@@ -150,8 +147,8 @@ class IS_FID_Evaluator:
         training = model.gen.training
         with torch.no_grad():
             model.gen.eval()
-            generated = generate_test_samples(model, self.dataset, batch_size=self.batch_size,
-                                              n_samples=self.nb_samples)
+            generated = generate_n_test_samples(model, self.dataset, batch_size=self.batch_size,
+                                                n_samples=self.nb_samples, device=self.device)
             loader = DataLoader(generated, batch_size=self.batch_size, drop_last=False, shuffle=False)
             hook = InceptionFrechetActivationHook(self.inception)
 
@@ -159,8 +156,7 @@ class IS_FID_Evaluator:
             preds = np.zeros((self.nb_samples, 1000), dtype=np.float32)
             activations = np.zeros((self.nb_samples, 2048), dtype=np.float32)
 
-            for i, batch in enumerate(
-                    tqdm(loader, desc='Computing IS and FID', dynamic_ncols=True, leave=False)):
+            for i, batch in enumerate(tqdm(loader, desc='Computing IS and FID', dynamic_ncols=True, leave=False)):
                 l = len(batch)
 
                 # IS
