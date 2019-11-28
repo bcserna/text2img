@@ -3,7 +3,7 @@ import click
 from src.config import DEVICE
 from src.data import CUB
 from src.damsm import DAMSM
-from src.evaluation import FIDEvaluator, IS_FID_Evaluator
+from src.evaluation import IS_FID_Evaluator
 from src.gan import AttnGAN
 
 
@@ -38,7 +38,7 @@ def train_damsm(epochs, name, patience, device):
     cub = CUB()
     damsm = DAMSM(len(cub.train.vocab), device=device)
     metrics = damsm.train(cub, epochs, patience=patience)
-    damsm.save(name)
+    damsm.save(name, metrics=metrics)
     return damsm, metrics
 
 
