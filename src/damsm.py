@@ -148,7 +148,7 @@ class DAMSM:
         if metrics is not None:
             with open(f'{save_dir}/{name}_metrics.json', 'w') as f:
                 metrics = pre_json_metrics(metrics)
-                json.dumps(metrics, f)
+                json.dump(metrics, f)
 
     @staticmethod
     def remove_previous_best(name, save_dir=DAMSM_MODEL_DIR):
