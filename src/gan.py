@@ -371,8 +371,8 @@ class AttnGAN:
         self.gen.eval(), self.disc.eval()
 
     @staticmethod
-    def load(name, damsm, load_dir=GAN_MODEL_DIR):
-        attngan = AttnGAN(damsm)
+    def load(name, damsm, load_dir=GAN_MODEL_DIR, device=DEVICE):
+        attngan = AttnGAN(damsm, device=device)
         attngan.load_(name, load_dir)
         return attngan
 
