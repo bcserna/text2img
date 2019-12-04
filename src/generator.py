@@ -33,20 +33,30 @@ class Generator0(nn.Module):
         return x  # D_GF/16 x 64 x 64
 
 
+def self_attn_block():
+    return nn.Sequential(
+        nn.Conv2d(D_GF, D_GF, 4, 2, 1),
+        nn.LeakyReLU(0.2, inplace=True),
+        nn.Conv2d(D_GF, D_GF, 4, 2, 1),
+        nn.LeakyReLU(0.2, inplace=True),
+        SelfAttention(D_GF),
+        nn.ConvTranspose2d(D_GF, D_GF, 4, 2, 1),
+        nn.LeakyReLU(0.2, inplace=True),
+        nn.ConvTranspose2d(D_GF, D_GF, 4, 2, 1),
+        nn.LeakyReLU(0.2, inplace=True),
+    )
+
+
 class GeneratorN(nn.Module):
     def __init__(self, use_self_attention=True):
         super().__init__()
         self.residuals = nn.Sequential(*[residual_block(D_GF * 2) for _ in range(RESIDUALS)])
         self.attn = Attention(D_GF, D_HIDDEN)
         self.upsample = upsample_block(D_GF * 2, D_GF)
-        self.self_use_self_attention = use_self_attention
+        self.use_self_attention = use_self_attention
 
         if self.use_self_attention:
-            self.self_attn = nn.Sequential([
-                SelfAttention(D_GF // 2),
-                conv1x1(D_GF // 2, D_GF // 2),
-                nn.LeakyReLU(0.2, inplace=True)
-            ])
+            self.self_attn = self_attn_block()
 
         p_trainable, p_non_trainable = count_params(self)
         print(f'GeneratorN params: trainable {p_trainable} - non_trainable {p_non_trainable}')
@@ -60,12 +70,13 @@ class GeneratorN(nn.Module):
         """
         self.attn.applyMask(mask)
         c_code, att = self.attn(h_code, word_embs)
+        # Image-text attention first, image-image attention second
+        if self.use_self_attention:
+            c_code = self.self_attn(c_code)
+
         out_code = torch.cat((h_code, c_code), 1)
         out_code = self.residuals(out_code)
         out_code = self.upsample(out_code)  # D_GF/2 x 2ih x 2iw
-
-        if self.self_use_self_attention:
-            out_code = self.self_attn(out_code)
 
         return out_code, att
 
