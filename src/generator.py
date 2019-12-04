@@ -4,7 +4,7 @@ from torch.nn import functional as F
 
 from src.attention import Attention
 from src.config import D_GF, D_Z, D_COND, D_HIDDEN, RESIDUALS, DEVICE
-from src.util import upsample_block, residual_block, conv3x3, count_params
+from src.util import upsample_block, residual_block, conv3x3, count_params, conv1x1
 
 
 class Generator0(nn.Module):
@@ -34,11 +34,19 @@ class Generator0(nn.Module):
 
 
 class GeneratorN(nn.Module):
-    def __init__(self):
+    def __init__(self, use_self_attention=True):
         super().__init__()
         self.residuals = nn.Sequential(*[residual_block(D_GF * 2) for _ in range(RESIDUALS)])
         self.attn = Attention(D_GF, D_HIDDEN)
         self.upsample = upsample_block(D_GF * 2, D_GF)
+        self.self_use_self_attention = use_self_attention
+
+        if self.use_self_attention:
+            self.self_attn = nn.Sequential([
+                SelfAttention(D_GF // 2),
+                conv1x1(D_GF // 2, D_GF // 2),
+                nn.LeakyReLU(0.2, inplace=True)
+            ])
 
         p_trainable, p_non_trainable = count_params(self)
         print(f'GeneratorN params: trainable {p_trainable} - non_trainable {p_non_trainable}')
@@ -52,9 +60,13 @@ class GeneratorN(nn.Module):
         """
         self.attn.applyMask(mask)
         c_code, att = self.attn(h_code, word_embs)
-        h_c_code = torch.cat((h_code, c_code), 1)
-        out_code = self.residuals(h_c_code)
-        out_code = self.upsample(out_code)  # D_GF/2 x 2in_size x 2in_size
+        out_code = torch.cat((h_code, c_code), 1)
+        out_code = self.residuals(out_code)
+        out_code = self.upsample(out_code)  # D_GF/2 x 2ih x 2iw
+
+        if self.self_use_self_attention:
+            out_code = self.self_attn(out_code)
+
         return out_code, att
 
 
@@ -137,3 +149,26 @@ class CondAug(nn.Module):
         mu, logvar = self.encode(text_emb)
         c_code = self.reparam(mu, logvar)
         return c_code, mu, logvar
+
+
+class SelfAttention(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.q_proj = nn.Conv2d(in_channels=in_channels, out_channels=in_channels // 8, kernel_size=1)
+        self.k_proj = nn.Conv2d(in_channels=in_channels, out_channels=in_channels // 8, kernel_size=1)
+        self.v_proj = nn.Conv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=1)
+        self.gamma = nn.Parameter(torch.zeros(1))
+
+    def forward(self, x):
+        batch, c, h, w = x.shape
+        q = self.q_proj(x).view(batch, -1, w * h).permute(0, 2, 1)  # Batch x W*H x C(proj)
+        k = self.k_proj(x).view(batch, -1, w * h)  # Batch x C(proj) x W*H
+        v = self.v_proj(x).view(batch, -1, w * h)  # Batch x C(proj) x W*H
+
+        score = q @ k  # Batch x W*H x W*H
+        score = F.softmax(score, -1)
+
+        out = v @ score.permute(0, 2, 1)  # Batch x C x W*H
+        out = out.view(batch, c, w, h)  # Batch x C x W x H
+        out = self.gamma * out + x
+        return out
