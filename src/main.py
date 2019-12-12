@@ -24,6 +24,8 @@ def train_gan(epochs, name, gan, damsm, device):
         damsm_model = DAMSM.load(damsm, device=device)
     if gan is None:
         gan = AttnGAN(damsm_model, device)
+    else:
+        gan = AttnGAN.load(gan, damsm_model, device=device)
     metrics = gan.train(cub, epochs, evaluator=IS_FID_Evaluator)
     gan.save(name, metrics=metrics)
     return gan, metrics
