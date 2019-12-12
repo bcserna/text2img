@@ -44,7 +44,7 @@ class CUBSubset(Dataset):
 
     def encode_text(self, text):
         encoded = [self.vocab.get(w, self.vocab[UNK_TOKEN]) for w in text.split()]
-        encoded = encoded[:CAP_MAX_LEN - 1]  # address END token
+        encoded = encoded[:CAP_MAX_LEN]  # address END token
         cap_len = len(encoded)
         encoded = encoded + [self.vocab[END_TOKEN]] * (CAP_MAX_LEN - cap_len)
         encoded = np.asarray(encoded)
@@ -99,7 +99,8 @@ class CUB:
                 for line in lines:
                     line = line.replace('\ufffd\ufffd', ' ').replace(',', ' ').replace('-', ' ').replace('/',
                                                                                                          ' ').lower().strip()
-                    line = ' '.join(line.split())
+                    line = line.split()[:CAP_MAX_LEN]
+                    line = ' '.join(line)
                     line = pattern.sub('', line)
                     captions.append(line)
 
@@ -113,7 +114,7 @@ class CUB:
         self.data['train'] = self.data['img_path'].apply(lambda x: 0 if x[:x.index('.jpg')] in test else 1)
         self.data.sort_values(by='train', inplace=True, ascending=False)
 
-        self.word_freq = self.count_word_freq(self.data)
+        self.word_freq = self.count_word_freq(self.data[self.data.train == 1])
         self.vocab = self.build_vocab(self.word_freq)
         print(f'Vocab size: {len(self.vocab)}')
 
