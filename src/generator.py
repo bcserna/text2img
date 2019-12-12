@@ -48,7 +48,7 @@ def self_attn_block():
 
 
 class GeneratorN(nn.Module):
-    def __init__(self, use_self_attention=True):
+    def __init__(self, use_self_attention=False):
         super().__init__()
         self.residuals = nn.Sequential(*[residual_block(D_GF * 2) for _ in range(RESIDUALS)])
         self.attn = Attention(D_GF, D_HIDDEN)
