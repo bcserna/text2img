@@ -70,11 +70,11 @@ def conv3x3(in_channels, out_channels):
     return nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
 
 
-def upsample_block(in_planes, out_planes):
+def upsample_block(in_channels, out_channels):
     return nn.Sequential(
         Interpolate(scale_factor=2, mode='nearest'),
-        conv3x3(in_planes, out_planes * 2),
-        nn.BatchNorm2d(out_planes * 2),
+        conv3x3(in_channels, out_channels * 2),
+        nn.BatchNorm2d(out_channels * 2),
         nn.modules.activation.GLU(dim=1)
     )
 
