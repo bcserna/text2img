@@ -4,7 +4,7 @@ from torch.nn import functional as F
 
 from src.attention import Attention
 from src.config import D_GF, D_Z, D_COND, D_HIDDEN, RESIDUALS, DEVICE
-from src.util import upsample_block, residual_block, conv3x3, count_params, conv1x1
+from src.util import upsample_block, conv3x3, count_params, Residual
 
 
 class Generator0(nn.Module):
@@ -50,7 +50,7 @@ def self_attn_block():
 class GeneratorN(nn.Module):
     def __init__(self, use_self_attention=False):
         super().__init__()
-        self.residuals = nn.Sequential(*[residual_block(D_GF * 2) for _ in range(RESIDUALS)])
+        self.residuals = nn.Sequential(*[Residual(D_GF * 2) for _ in range(RESIDUALS)])
         self.attn = Attention(D_GF, D_HIDDEN)
         self.upsample = upsample_block(D_GF * 2, D_GF)
         self.use_self_attention = use_self_attention

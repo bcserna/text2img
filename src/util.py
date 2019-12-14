@@ -79,14 +79,21 @@ def upsample_block(in_planes, out_planes):
     )
 
 
-def residual_block(channels):
-    return nn.Sequential(
-        conv3x3(channels, channels * 2),
-        nn.BatchNorm2d(channels * 2),
-        nn.modules.activation.GLU(dim=1),
-        conv3x3(channels, channels),
-        nn.BatchNorm2d(channels)
-    )
+class Residual(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.block = nn.Sequential(
+            conv3x3(channels, channels * 2),
+            nn.BatchNorm2d(channels * 2),
+            nn.modules.activation.GLU(dim=1),
+            conv3x3(channels, channels),
+            nn.BatchNorm2d(channels)
+        )
+
+    def forward(self, x):
+        out = self.block(x)
+        out += x
+        return out
 
 
 def pre_json_metrics(d):
