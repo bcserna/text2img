@@ -278,6 +278,7 @@ class Flowers:
 
         self.word_freq = count_word_freq(self.data[self.data.train == 1])
         self.vocab = build_vocab(self.word_freq)
+        print(f'Vocab size: {len(self.vocab)}')
 
         self.max_size = BASE_SIZE * (2 ** (BRANCH_NUM - 1))
         self.transforms = transforms.Compose([
