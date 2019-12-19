@@ -1,7 +1,7 @@
 import click
 
 from src.config import DEVICE
-from src.data import CUB
+from src.data import CUB, Flowers
 from src.damsm import DAMSM
 from src.evaluation import IS_FID_Evaluator
 from src.gan import AttnGAN
@@ -18,15 +18,20 @@ def main():
 @click.option('--gan', default=None)
 @click.option('--damsm', default=None)
 @click.option('--device', default=DEVICE)
-def train_gan(epochs, name, gan, damsm, device):
-    cub = CUB()
+@click.option('--dataset', default=None)
+def train_gan(epochs, name, gan, damsm, device, dataset):
+    if dataset is None:
+        dataset = CUB()
+    else:
+        dataset = Flowers()
+
     if damsm is not None:
         damsm_model = DAMSM.load(damsm, device=device)
     if gan is None:
         gan = AttnGAN(damsm_model, device)
     else:
         gan = AttnGAN.load(gan, damsm_model, device=device)
-    metrics = gan.train(cub, epochs, evaluator=IS_FID_Evaluator)
+    metrics = gan.train(dataset, epochs, evaluator=IS_FID_Evaluator)
     gan.save(name, metrics=metrics)
     return gan, metrics
 
@@ -36,8 +41,12 @@ def train_gan(epochs, name, gan, damsm, device):
 @click.argument('damsm')
 @click.argument('save_dir')
 @click.option('--device', default=DEVICE)
-def validate_gan(gan, damsm, save_dir, device):
-    dataset = CUB()
+@click.option('--dataset', default=None)
+def validate_gan(gan, damsm, save_dir, device, dataset):
+    if dataset is None:
+        dataset = CUB()
+    else:
+        dataset = Flowers()
     damsm_model = DAMSM.load(damsm, device=device)
     gan_model = AttnGAN.load(gan, damsm_model, device=device)
     gan_model.validate_test_set(dataset, save_dir=save_dir)
@@ -48,10 +57,14 @@ def validate_gan(gan, damsm, save_dir, device):
 @click.argument('name')
 @click.option('--patience', type=int, default=20)
 @click.option('--device', default=DEVICE)
-def train_damsm(epochs, name, patience, device):
-    cub = CUB()
-    damsm = DAMSM(len(cub.train.vocab), device=device)
-    metrics = damsm.train(cub, epochs, patience=patience)
+@click.option('--dataset', default=None)
+def train_damsm(epochs, name, patience, device, dataset):
+    if dataset is None:
+        dataset = CUB()
+    else:
+        dataset = Flowers()
+    damsm = DAMSM(len(dataset.train.vocab), device=device)
+    metrics = damsm.train(dataset, epochs, patience=patience)
     damsm.save(name, metrics=metrics)
     return damsm, metrics
 
