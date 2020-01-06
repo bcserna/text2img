@@ -73,9 +73,9 @@ def conv3x3(in_channels, out_channels):
 def upsample_block(in_channels, out_channels):
     return nn.Sequential(
         Interpolate(scale_factor=2, mode='nearest'),
-        conv3x3(in_channels, out_channels),
-        nn.BatchNorm2d(out_channels),
-        nn.LeakyReLU(0.2, inplace=True)
+        conv3x3(in_channels, out_channels * 2),
+        nn.BatchNorm2d(out_channels * 2),
+        nn.modules.activation.GLU(dim=1)
     )
 
 
@@ -83,9 +83,9 @@ class Residual(nn.Module):
     def __init__(self, channels):
         super().__init__()
         self.block = nn.Sequential(
-            conv3x3(channels, channels),
-            nn.BatchNorm2d(channels),
-            nn.LeakyReLU(0.2, inplace=True),
+            conv3x3(channels, channels * 2),
+            nn.BatchNorm2d(channels * 2),
+            nn.modules.activation.GLU(dim=1),
             conv3x3(channels, channels),
             nn.BatchNorm2d(channels)
         )
