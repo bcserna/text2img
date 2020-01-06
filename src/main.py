@@ -15,18 +15,12 @@ def main():
 @main.command()
 @click.argument('epochs', type=int)
 @click.argument('name')
+@click.argument('damsm')
 @click.option('--gan', default=None)
-@click.option('--damsm', default=None)
 @click.option('--device', default=DEVICE)
-@click.option('--dataset', default=None)
-def train_gan(epochs, name, gan, damsm, device, dataset):
-    if dataset is None:
-        dataset = CUB()
-    else:
-        dataset = Flowers()
-
-    if damsm is not None:
-        damsm_model = DAMSM.load(damsm, device=device)
+def train_gan(epochs, name, gan, damsm, device):
+    dataset = CUB()
+    damsm_model = DAMSM.load(damsm, device=device)
     if gan is None:
         gan = AttnGAN(damsm_model, device)
     else:
@@ -41,12 +35,8 @@ def train_gan(epochs, name, gan, damsm, device, dataset):
 @click.argument('damsm')
 @click.argument('save_dir')
 @click.option('--device', default=DEVICE)
-@click.option('--dataset', default=None)
-def validate_gan(gan, damsm, save_dir, device, dataset):
-    if dataset is None:
-        dataset = CUB()
-    else:
-        dataset = Flowers()
+def validate_gan(gan, damsm, save_dir, device):
+    dataset = CUB()
     damsm_model = DAMSM.load(damsm, device=device)
     gan_model = AttnGAN.load(gan, damsm_model, device=device)
     gan_model.validate_test_set(dataset, save_dir=save_dir)
@@ -57,12 +47,8 @@ def validate_gan(gan, damsm, save_dir, device, dataset):
 @click.argument('name')
 @click.option('--patience', type=int, default=20)
 @click.option('--device', default=DEVICE)
-@click.option('--dataset', default=None)
-def train_damsm(epochs, name, patience, device, dataset):
-    if dataset is None:
-        dataset = CUB()
-    else:
-        dataset = Flowers()
+def train_damsm(epochs, name, patience, device):
+    dataset = CUB()
     damsm = DAMSM(len(dataset.train.vocab), device=device)
     metrics = damsm.train(dataset, epochs, patience=patience)
     damsm.save(name, metrics=metrics)
