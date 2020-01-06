@@ -12,9 +12,9 @@ class Generator0(nn.Module):
         super().__init__()
         self.d_gf = D_GF * 16
         self.fc = nn.Sequential(
-            nn.Linear(D_Z + D_COND, self.d_gf * 4 * 4, bias=False),
-            nn.BatchNorm1d(self.d_gf * 4 * 4),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.Linear(D_Z + D_COND, self.d_gf * 4 * 4 * 2, bias=False),
+            nn.BatchNorm1d(self.d_gf * 4 * 4 * 2),
+            nn.modules.activation.GLU(dim=1)
         )
 
         self.upsample_steps = nn.Sequential(
@@ -30,7 +30,7 @@ class Generator0(nn.Module):
         x = x.view(-1, self.d_gf, 4, 4)  # -> D_GF x 4 x 4
         x = self.upsample_steps(x)
 
-        return x  # D_GF x 64 x 64
+        return x  # D_GF/16 x 64 x 64
 
 
 def self_attn_block():
@@ -76,7 +76,7 @@ class GeneratorN(nn.Module):
 
         out_code = torch.cat((h_code, c_code), 1)
         out_code = self.residuals(out_code)
-        out_code = self.upsample(out_code)  # D_GF x 2ih x 2iw
+        out_code = self.upsample(out_code)  # D_GF/2 x 2ih x 2iw
 
         return out_code, att
 
@@ -137,7 +137,7 @@ class CondAug(nn.Module):
     def __init__(self, device=DEVICE):
         super().__init__()
         self.device = device
-        self.fc = nn.Linear(D_HIDDEN, D_COND * 2, bias=True).to(self.device)
+        self.fc = nn.Linear(D_HIDDEN, D_COND * 4, bias=True).to(self.device)
 
     def to(self, device):
         self.device = device
@@ -145,7 +145,7 @@ class CondAug(nn.Module):
         return self
 
     def encode(self, text_emb):
-        x = F.leaky_relu(self.fc(text_emb))
+        x = F.glu(self.fc(text_emb))
         mu = x[:, :D_COND]
         logvar = x[:, D_COND:]
         return mu, logvar
