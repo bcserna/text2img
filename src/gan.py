@@ -9,11 +9,13 @@ import time
 import os
 from tqdm import tqdm
 from copy import deepcopy
+from sklearn.linear_model import LogisticRegression
 
 from src.config import DEVICE, GAN_BATCH, GENERATOR_LR, DISCRIMINATOR_LR, D_Z, END_TOKEN, LAMBDA, GAN_MODEL_DIR, OUT_DIR
 from src.util import rotate_tensor, init_weights, grad_norm, freeze_params_, pre_json_metrics
 from src.generator import Generator
 from src.discriminator import Discriminator
+from src.evaluation import IS_FID_Evaluator, activation_statistics, frechet_dist
 
 
 class AttnGAN:
@@ -37,7 +39,7 @@ class AttnGAN:
                                                  betas=(0.5, 0.999))
                                 for d in self.discriminators]
 
-    def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=5, hist_avg=True, evaluator=None):
+    def train(self, dataset, epoch, batch_size=GAN_BATCH, test_sample_every=5, hist_avg=False, evaluator=None):
         start_time = time.strftime("%Y-%m-%d-%H-%M", time.gmtime())
         os.makedirs(f'{OUT_DIR}/{start_time}')
 
@@ -73,6 +75,8 @@ class AttnGAN:
 
         noise = torch.FloatTensor(batch_size, D_Z).to(self.device)
         gen_updates = 0
+
+        self.disc.train()
         for e in tqdm(range(epoch), desc='Epochs', dynamic_ncols=True):
             self.gen.train(), self.disc.train()
             g_loss = 0
@@ -135,10 +139,6 @@ class AttnGAN:
                         for p, avg_p in zip(self.gen.parameters(), avg_g_params):
                             p.data.copy_(avg_p)
 
-                # train_pbar.set_description(f'Training (G: {avg_g_loss:05.4f}  '
-                #                            f'D64: {batch_d_loss[0]:05.4f}  '
-                #                            f'D128: {batch_d_loss[1]:05.4f}  '
-                #                            f'D256: {batch_d_loss[2]:05.4f})')
                 train_pbar.set_description(f'Training (G: {grad_norm(self.gen):.2f}  '
                                            f'D64: {d_grad_norm[0]:.2f}  '
                                            f'D128: {d_grad_norm[1]:.2f}  '
@@ -290,7 +290,6 @@ class AttnGAN:
 
             real_logits = d.logit(real_features, sent_embs)
 
-            # real_labels = torch.ones_like(real_logits, dtype=torch.float).to(self.device)
             real_labels = torch.full_like(real_logits, 1 - label_smoothing).to(self.device)
             fake_labels = torch.zeros_like(real_logits, dtype=torch.float).to(self.device)
 
@@ -396,3 +395,139 @@ class AttnGAN:
                 for img in generated[-1]:
                     save_image(img, f'{save_dir}/{i}.jpg', normalize=True, range=(-1, 1))
                     i += 1
+
+    def get_d_score(self, imgs, sent_embs):
+        d = self.disc.d256
+        features = d(imgs.to(self.device))
+        scores = d.logit(features, sent_embs)
+        return scores
+
+    def accept_prob(self, score1, score2):
+        return min(1, (1 / score1 - 1) / (1 / score2 - 1))
+
+    def d_scores_test(self, dataset):
+        with torch.no_grad():
+            loader = DataLoader(dataset.test, batch_size=20, shuffle=False, drop_last=False,
+                                collate_fn=dataset.collate_fn)
+            scores = []
+            d = self.disc.d256
+            for b in loader:
+                img = b['img256'].to(self.device)
+                f = d(img)
+                l = d.logit(f)
+                scores.append(torch.sigmoid(l))
+            scores = [x.item() for s in scores for x in s.reshape(-1)]
+        return scores
+
+    def z_test(self, scores, labels):
+        labels = np.array(labels)
+        scores = np.array(scores)
+        num = np.sum(labels - scores)
+        denom = np.sqrt(np.sum(scores * (1 - scores)))
+        return num / denom
+
+    def d_scores_gen(self, dataset):
+        with torch.no_grad():
+            loader = DataLoader(dataset.test, batch_size=20, shuffle=False, drop_last=False,
+                                collate_fn=dataset.collate_fn)
+            scores = []
+            d = self.disc.d256
+            for b in loader:
+                noise = torch.FloatTensor(len(b['caption']), D_Z).to(self.device)
+                noise.data.normal_(0, 1)
+                word_embs, sent_embs = self.damsm.txt_enc(b['caption'])
+                attn_mask = torch.tensor(b['caption']).to(self.device) == dataset.vocab[END_TOKEN]
+                generated, _, _, _ = self.gen(noise, sent_embs, word_embs, attn_mask)
+
+                f = d(generated[-1])
+                l = d.logit(f)
+                scores.append(torch.sigmoid(l))
+            scores = [x.item() for s in scores for x in s.reshape(-1)]
+        return scores
+
+    def mh_sample(self, dataset, k, save_dir='test_samples', batch=GAN_BATCH):
+        evaluator = IS_FID_Evaluator(dataset, self.damsm.img_enc.inception_model, batch, self.device)
+        # self.disc.d256.train()
+        with torch.no_grad():
+            l = len(dataset.test)
+            score_real = self.d_scores_test(dataset)
+            score_gen = self.d_scores_gen(dataset)
+            print(np.mean(score_real))
+            print(np.mean(score_gen))
+            portion = -l // 5
+            score_test = score_real[:portion] + score_gen[:portion]
+            label_test = [1] * (len(score_test) // 2) + [0] * (len(score_test) // 2)
+
+            print('Z test before calibration: ', self.z_test(torch.tensor(score_test), label_test))
+
+            score_real_calib = score_real[portion:]
+            score_gen_calib = score_gen[portion:]
+            # score_calib = score_real_calib + score_gen_calib
+            score_calib = score_gen_calib + score_real_calib
+            label_calib = len(score_gen_calib) * [0] + len(score_real_calib) * [1]
+
+            cal_clf = LogisticRegression()
+            cal_clf.fit(np.array(score_calib).reshape(-1, 1), label_calib)
+
+            score_pred = cal_clf.predict_proba(np.array(score_test).reshape(-1, 1))[:, 1]
+            print('Score pred avg: ', np.mean(score_pred))
+            test_pred = cal_clf.predict(np.array(score_test).reshape(-1, 1))
+
+            print('Z test after calibration: ', self.z_test(score_pred, label_test))
+            print('Accuracy: ', sum((test_pred == label_test)) / len(test_pred))
+
+            os.makedirs(save_dir, exist_ok=True)
+            loader = DataLoader(dataset.test, batch_size=1, shuffle=False, drop_last=False,
+                                collate_fn=dataset.collate_fn)
+            loader = tqdm(loader, dynamic_ncols=True, leave=True, desc='Generating samples for test set')
+
+            imgs = []
+            true_probs = 0
+            noaccept = 0
+            for i, sample in enumerate(loader):
+                if i > l - (l // 10):
+                    continue
+                word_embs, sent_embs = self.damsm.txt_enc(sample['caption'])
+                attn_mask = torch.tensor(sample['caption']).to(self.device) == dataset.vocab[END_TOKEN]
+
+                img_chain = []
+                while len(img_chain) < k:
+                    noise = torch.FloatTensor(batch, D_Z).to(self.device)
+                    noise.data.normal_(0, 1)
+                    generated, _, _, _ = self.gen(noise, sent_embs.repeat(batch, 1),
+                                                  word_embs.repeat(batch, 1, 1),
+                                                  attn_mask.repeat(batch, 1))
+
+                    for img in generated[-1]:
+                        img_chain.append(img)
+
+                img_chain = img_chain[:k]
+                img_chain = torch.stack(img_chain).to(self.device)
+
+                score_chain = []
+                d_loader = DataLoader(img_chain, batch_size=batch, shuffle=False, drop_last=False)
+                for d_batch in d_loader:
+                    scores = self.get_d_score(d_batch, sent_embs.repeat(batch, 1))
+                    scores = scores.reshape(-1, 1).cpu().numpy()
+                    scores = cal_clf.predict_proba(scores)[:, 1]
+                    for s in scores:
+                        score_chain.append(s)
+                chosen = 0
+                for j, s in enumerate(score_chain[1:], 1):
+                    alpha = self.accept_prob(score_chain[chosen], s)
+                if np.random.rand() < alpha:
+                    chosen = j
+
+                if chosen == 0:
+                    imgs.append(img_chain[torch.tensor(score_chain[1:]).argmax()].cpu())
+                    noaccept += 1
+                else:
+                    imgs.append(img_chain[chosen].cpu())
+                true_probs += score_chain[0]
+
+            print(noaccept)
+            print(true_probs / len(dataset.test))
+            mu_real, sig_real = evaluator.mu_real, evaluator.sig_real
+            mu_fake, sig_fake = activation_statistics(self.damsm.img_enc.inception_model, imgs)
+            print('FID: ', frechet_dist(mu_real, sig_real, mu_fake, sig_fake))
+            return imgs
